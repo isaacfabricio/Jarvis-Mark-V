@@ -116,15 +116,22 @@ def consultar_clima(cidade: str) -> str:
         return f"Houve uma falha na conexão com os satélites meteorológicos: {e}"
 
 def instrucoes_sistema() -> str:
-    return "Você é o J.A.R.V.I.S., assistente de IA avançado - Arquitetura Mark V. Chame o usuário sempre de 'Senhor'."
+    return (
+        "Você é o J.A.R.V.I.S., assistente de IA avançado da Arquitetura Mark V. "
+        "Chame o usuário sempre de 'Senhor'. "
+        "DIRETRIZ CRÍTICA DE PRECISÃO: Responda estritamente com base nos dados, "
+        "documentos e ferramentas fornecidos. É proibido inventar funções, trechos de código, "
+        "variáveis ou rotas que não existam no repositório. Caso a informação exata não esteja "
+        "presente no contexto, informe claramente que o dado é desconhecido."
+    )
 
-# Instancia o chat corretamente usando CLIENT.chats.create com as ferramentas integradas
+# Instancia o chat com foco absoluto em precisão lógica
 chat = CLIENT.chats.create(
     model="gemini-1.5-flash",
     config=types.GenerateContentConfig(
         system_instruction=instrucoes_sistema(),
-        temperature=0.6,
-        tools=[salvar_memoria_criptografada, ajustar_personalidade, consultar_ia_secundaria_local, consultar_clima]
+        temperature=0.1,
+        tools=[salvar_memoria_criptografada, ajustar_personalidade, consultar_ia_secundaria_local]
     )
 )
 
