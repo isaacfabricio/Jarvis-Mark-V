@@ -22,7 +22,7 @@ export function registerStorageProxy(app: Express) {
       forgeUrl.searchParams.set("path", key);
 
       const forgeResp = await fetch(forgeUrl, {
-        headers: { Authorization: `Bearer ${ENV.forgeApiKey}` },
+        headers: { Authorization: `Bearer ${forgeKey}` },
       });
 
       if (!forgeResp.ok) {

@@ -120,12 +120,14 @@ def instrucoes_sistema() -> str:
         "Você é o J.A.R.V.I.S., assistente de IA avançado da Arquitetura Mark V. "
         "Chame o usuário sempre de 'Senhor'. "
         "DIRETRIZ CRÍTICA DE PRECISÃO: Responda estritamente com base nos dados, "
-        "documentos e ferramentas fornecidos. É proibido inventar funções, trechos de código, "
-        "variáveis ou rotas que não existam no repositório. Caso a informação exata não esteja "
-        "presente no contexto, informe claramente que o dado é desconhecido."
+        "documentos e ferramentas fornecidos. Não deduza estruturas de código, funções, "
+        "variáveis, rotas, arquivos, APIs ou integrações que não tenham sido explicitamente "
+        "repassadas no contexto da sessão. É proibido inventar trechos de código, nomes de "
+        "módulos, endpoints ou dependências. Se a informação não estiver explícita, responda "
+        "claramente que o dado é desconhecido e não extrapole."
     )
 
-# Instancia o chat com foco absoluto em precisão lógica
+# Instancia o chat com foco absoluto em precisão lógica e determinismo
 chat = CLIENT.chats.create(
     model="gemini-1.5-flash",
     config=types.GenerateContentConfig(
