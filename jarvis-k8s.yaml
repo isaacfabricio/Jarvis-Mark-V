@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jarvis-secrets
+type: Opaque
+stringData:
+  GEMINI_API_KEY: "sua-chave-gemini-aqui"
+  VAULT_KEY: "sua-chave-fernet-aqui"
+  JARVIS_TOKEN: "seu-token-secreto-aqui"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jarvis-cerebro-deployment
+  labels:
+    app: jarvis-cerebro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jarvis-cerebro
+  template:
+    metadata:
+      labels:
+        app: jarvis-cerebro
+    spec:
+      containers:
+      - name: jarvis-cerebro
+        image: jarvis-core:mark5-pro
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+        env:
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jarvis-secrets
+              key: GEMINI_API_KEY
+        - name: VAULT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: jarvis-secrets
+              key: VAULT_KEY
+        - name: JARVIS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: jarvis-secrets
+              key: JARVIS_TOKEN
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jarvis-cerebro-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: jarvis-cerebro

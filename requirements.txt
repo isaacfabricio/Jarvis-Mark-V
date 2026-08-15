@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-dotenv
+opencv-python
+edge-tts
+psutil
+pyautogui
+pygetwindow
+pygame
+requests
+speechrecognition
+pywebview
+cryptography
+google-genai

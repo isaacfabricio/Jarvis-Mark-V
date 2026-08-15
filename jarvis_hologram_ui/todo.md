@@ -1,0 +1,34 @@
+# Project TODO
+
+- [x] Inicializar projeto fullstack e estruturar diretórios
+- [x] Configurar tipografia Orbitron e estilos visuais HUD holográfico no Tailwind / index.css
+- [x] Implementar componente do Núcleo Central com animações CSS para STANDBY, THINKING e SPEAKING
+- [x] Implementar painel de Telemetria com gráficos em tempo real (CPU e RAM)
+- [x] Implementar Log de Eventos e Chat de Texto conectado via WebSocket com configuração de URL e Token
+- [x] Criar testes unitários (vitest) para validar comportamentos do WebSocket e estado HUD
+- [x] Salvar checkpoint e preparar entrega da HUD JARVIS ao usuário
+- [x] Implementar handshake WebSocket robusto e diagnóstico de conexão
+- [x] Integrar entrada de voz (Microfone) e saída de voz (TTS) nativa na HUD
+- [x] Adicionar barra de comandos rápidos para memória, personalidade e diagnóstico
+- [x] Testar fluxos de voz e comandos integrados antes da entrega final
+- [x] Extrair e testar a normalização de payloads WebSocket (telemetria, eventos e mensagens inválidas)
+- [x] Testar a serialização de comandos e as transições STANDBY, THINKING e SPEAKING
+- [x] Extrair a máquina de estados do núcleo HUD para uma função pura e testar comando -> THINKING, resposta -> SPEAKING e finalização -> STANDBY
+- [x] Testar explicitamente o estado inicial STANDBY e a transição de encerramento do fluxo de fala
+- [x] Extrair funções testáveis de voz, TTS, quick actions e handshake da HUD
+- [x] Validar o fluxo integrado quick action -> THINKING -> SPEAKING -> STANDBY e erros de permissão do microfone
+- [x] Extrair planos puros de fala, microfone e reconexão para fora de Home.tsx
+- [x] Testar a sequência integrada de estado e efeitos: quick action -> THINKING -> SPEAKING -> STANDBY
+- [x] Extrair o fluxo completo de comando e resposta da HUD para funções puras testáveis
+- [x] Testar quick action -> comando enviado -> THINKING -> SPEAKING -> STANDBY com logs e voz habilitada
+- [x] Extrair efeitos de log e retorno pós-fala para o fluxo HUD compartilhado
+- [x] Testar logs do operador e do JARVIS dentro da sequência integrada completa
+- [x] Testar em uma única sequência comando -> log USER -> THINKING -> resposta JARVIS -> log JARVIS -> SPEAKING -> STANDBY
+- [x] Salvar checkpoint da integração real, voz e comandos rápidos para entrega
+- [x] Confirmar a presença e o papel do agente_windows.py na arquitetura local
+- [x] Traduzir os textos visíveis da HUD para português do Brasil
+- [x] Preservar STANDBY, THINKING, SPEAKING, JARVIS_TOKEN e o contrato WebSocket
+- [x] Validar a HUD traduzida com TypeScript, testes, build e pré-visualização
+- [x] Traduzir OFFLINE e as mensagens de voz e handshake exibidas pelos helpers compartilhados
+- [x] Revisar todas as strings visíveis alimentadas por shared/jarvisProtocol.ts e shared/jarvisRuntime.ts
+- [x] Revalidar visualmente a HUD integralmente em pt-BR antes do checkpoint
