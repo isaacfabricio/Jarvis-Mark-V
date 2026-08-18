@@ -154,6 +154,55 @@ app.mount("/static", StaticFiles(directory="frontend"), name="static")
 async def get_interface():
     return FileResponse("frontend/index.html")
 
+
+# Rota para sintetizar áudio a partir de texto (gera MP3 usando edge-tts)
+from fastapi import Request, HTTPException
+
+@app.post("/api/speak")
+async def api_speak(request: Request):
+    """Recebe JSON {"text": "texto a falar", "voice": "opcional", "format": "mp3|wav"}
+    Retorna o binário do áudio (audio/mpeg). Usa edge-tts quando disponível.
+    """
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="JSON inválido no corpo da requisição")
+
+    text = data.get("text")
+    if not text:
+        raise HTTPException(status_code=400, detail="Campo 'text' é obrigatório")
+    voice = data.get("voice", "pt-BR-AntonioNeural")
+    fmt = data.get("format", "mp3")
+
+    # Verifica disponibilidade do edge-tts
+    try:
+        import edge_tts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"edge-tts não está disponível: {e}")
+
+    import tempfile
+    import os
+
+    suffix = ".mp3" if fmt == "mp3" else ".wav"
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    tmp_name = tmp.name
+    tmp.close()
+
+    try:
+        # edge-tts suporta save async
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(tmp_name)
+    except Exception as e:
+        # cleanup
+        try:
+            os.unlink(tmp_name)
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Falha na síntese de voz: {e}")
+
+    media_type = "audio/mpeg" if suffix == ".mp3" else "audio/wav"
+    return FileResponse(tmp_name, media_type=media_type, filename=f"jarvis{suffix}")
+
 CONTROLE_BATERIA = {}
 
 @app.websocket("/ws/{token_acesso}")
