@@ -59,4 +59,9 @@ def _heuristic_fallback(text: str) -> Dict[str, Any]:
         return {"intent": "generate_sheet", "params": {}}
     if "dashboard" in t or "power bi" in t:
         return {"intent": "build_dashboard", "params": {}}
+    # Heurística para busca web
+    if any(k in t for k in ("buscar", "pesquisar", "pesquisa", "procurar", "pesquise", "buscar na web", "pesquise na web")):
+        # tenta extrair a parte após o verbo (ex.: "buscar na web preço do produto x")
+        # simplificação: enviar a frase completa como query
+        return {"intent": "web_search", "params": {"query": text}}
     return {"intent": "unknown", "params": {}}

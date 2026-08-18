@@ -23,6 +23,8 @@ def execute_intent(intent: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return generate_sheet(params)
     if intent == "build_dashboard":
         return build_dashboard(params)
+    if intent == "web_search":
+        return web_search(params)
     return {"status": "error", "message": f"Intent desconhecida: {intent}"}
 
 
@@ -71,3 +73,28 @@ def generate_sheet(params: Dict[str, Any]) -> Dict[str, Any]:
 
 def build_dashboard(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"status": "ok", "action": "build_dashboard", "params": params}
+
+
+def web_search(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handler que realiza buscas web usando Tavily.
+
+    Espera parâmetro 'query' em params ou combinar todos os params em string.
+    """
+    # import local para evitar erro se tavily não estiver instalado
+    try:
+        from .tools.web_search import buscar_na_web
+    except Exception as e:
+        return {"status": "error", "message": f"Falha ao importar buscar_na_web: {e}"}
+
+    query = params.get("query") if isinstance(params, dict) else None
+    if not query:
+        # montar query a partir de outros parâmetros
+        if isinstance(params, dict) and params:
+            # join key:val pairs
+            qparts = [f"{k}={v}" for k, v in params.items()]
+            query = " ".join(qparts)
+        else:
+            return {"status": "error", "message": "Nenhuma query fornecida para web_search"}
+
+    return buscar_na_web(query)
+
