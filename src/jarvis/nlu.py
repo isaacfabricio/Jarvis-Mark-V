@@ -23,29 +23,60 @@ def interpret_command(text: str) -> Dict[str, Any]:
     Observação: a função usa o LLM para produzir JSON. Em produção, vale
     validar o JSON e cair em um NLU local caso a chamada falhe.
     """
+    # Prompt em português que pede JSON estrito e exemplos. Força saída apenas em JSON.
     prompt = f"""
-You are an assistant that extracts a single intent and parameters from a user's short command.
-Return a JSON object with keys: intent (snake_case), params (object).
-If you cannot determine intent, set intent to "unknown" and return an empty params object.
+Você é um assistente que extrai uma única intent e parâmetros de um comando curto do usuário.
+Responda EXCLUSIVAMENTE com um objeto JSON válido. Não inclua explicações.
+O objeto deve ter as chaves: "intent" (snake_case) e "params" (objeto).
+Campos possíveis para intent: fetch_orders, manage_products, generate_sheet, build_dashboard, web_search, unknown.
+Se não conseguir determinar a intenção, retorne: {"intent": "unknown", "params": {}}.
+Se a frase contém um verbo de busca como "buscar", "pesquisar", "procurar", prefira a intent "web_search" e coloque a query no params.query.
+Exemplos de saída (JSON somente):
+{"intent": "fetch_orders", "params": {"from":"2026-08-01","to":"2026-08-18"}}
+{"intent": "web_search", "params": {"query":"preço do produto X"}}
+
 User command: "{text}"
 """
 
     try:
         resp = call_llm(prompt)
-    except LLMError as e:
+    except LLMError:
         # Fallback: tentar heurística simples
-        return _heuristic_fallback(text)
+        parsed = _heuristic_fallback(text)
+        return parsed
 
     # Espera-se que resp seja JSON — tenta parse seguro
+    parsed = None
     try:
         parsed = json.loads(resp)
-        if isinstance(parsed, dict) and "intent" in parsed:
-            return parsed
     except Exception:
         # Se falhar, usar heurística local
-        return _heuristic_fallback(text)
+        parsed = _heuristic_fallback(text)
 
-    return _heuristic_fallback(text)
+    # Normalizar e validar o dicionário de retorno
+    if not isinstance(parsed, dict):
+        parsed = _heuristic_fallback(text)
+
+    intent = parsed.get("intent") if isinstance(parsed, dict) else None
+    params = parsed.get("params") if isinstance(parsed, dict) else {}
+
+    # Se o LLM sugeriu uma intent inválida, usar fallback
+    valid_intents = {"fetch_orders", "manage_products", "generate_sheet", "build_dashboard", "web_search", "unknown"}
+    if intent not in valid_intents:
+        parsed = _heuristic_fallback(text)
+        intent = parsed.get("intent")
+        params = parsed.get("params")
+
+    # Regra adicional: se o usuário usou verbo de busca e intent não é web_search, sobrescrever
+    t_lower = text.lower()
+    if any(k in t_lower for k in ("buscar", "pesquisar", "pesquisa", "procurar", "pesquise")) and intent != "web_search":
+        params = params or {}
+        # se não houver query explícita, use o texto completo como query
+        if not params.get("query"):
+            params["query"] = text
+        return {"intent": "web_search", "params": params}
+
+    return {"intent": intent, "params": params}
 
 
 def _heuristic_fallback(text: str) -> Dict[str, Any]:
