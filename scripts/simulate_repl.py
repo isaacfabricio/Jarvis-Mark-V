@@ -15,8 +15,7 @@ EXAMPLES = [
 ]
 
 def run():
-    print("=== Simulação REPL Jarvis (local, sem LLM/Tavily) ===
-")
+    print("=== Simulação REPL Jarvis (local, sem LLM/Tavily) ===\n")
     # Forçar simulate via variável para buscas
     os.environ.setdefault("JARVIS_SIMULATE", "1")
 
@@ -30,8 +29,7 @@ def run():
             result = execute_intent(str(intent), {})
         print("Resultado:")
         print(result)
-        print("---
-")
+        print("---\n")
 
 if __name__ == "__main__":
     run()
