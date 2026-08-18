@@ -109,3 +109,40 @@ function habilitarComandoPorVoz() {
 window.jarvisFalar = jarvisFalar;
 window.iniciarOuvidoJarvis = iniciarOuvidoJarvis;
 window.habilitarComandoPorVoz = habilitarComandoPorVoz;
+
+// Envia texto ao servidor /api/speak e reproduz o áudio retornado
+async function jarvisSpeakServer(texto, voice = 'pt-BR-AntonioNeural', format = 'mp3'){
+  const token = window.localStorage.getItem('JARVIS_TOKEN');
+  if (!token) {
+    console.error('JARVIS_TOKEN não encontrado.');
+    return;
+  }
+  try{
+    const res = await fetch('/api/speak', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({text: texto, voice, format})
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({detail:'unknown'}));
+      console.error('Erro /api/speak:', res.status, err.detail || err);
+      return;
+    }
+    const buf = await res.arrayBuffer();
+    const blob = new Blob([buf], {type: format === 'mp3' ? 'audio/mpeg' : 'audio/wav'});
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play();
+  }catch(e){
+    console.error('Falha ao chamar /api/speak', e);
+  }
+}
+
+// Expor funções globalmente para uso via console ou botões
+window.jarvisFalar = jarvisFalar;
+window.iniciarOuvidoJarvis = iniciarOuvidoJarvis;
+window.habilitarComandoPorVoz = habilitarComandoPorVoz;
+window.jarvisSpeakServer = jarvisSpeakServer;
