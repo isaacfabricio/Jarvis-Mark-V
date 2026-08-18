@@ -11,6 +11,7 @@ um resultado ou lançar exceção em caso de erro.
 """
 from __future__ import annotations
 from typing import Dict, Any
+import os
 
 
 def execute_intent(intent: str, params: Dict[str, Any]) -> Dict[str, Any]:

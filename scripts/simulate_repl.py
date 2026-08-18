@@ -4,6 +4,14 @@ Roda alguns comandos de exemplo e mostra a saída que o REPL exibiria.
 """
 from __future__ import annotations
 import os
+import sys
+import os as _os
+# ensure src/ is on PYTHONPATH for local development
+ROOT = _os.path.dirname(_os.path.dirname(__file__))
+SRC = _os.path.join(ROOT, "src")
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
+
 from jarvis.nlu import interpret_command
 from jarvis.commands import execute_intent
 
