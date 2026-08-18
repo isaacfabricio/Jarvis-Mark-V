@@ -34,6 +34,49 @@ def call_llm(prompt: str, *, model: str = "gemini") -> str:
     # passada em GEMINI_API_KEY. Se desejar usar outro adaptador (biblioteca
     # oficial), substitua `_call_gemini_api` abaixo.
     try:
+        # Prefer using the official google.genai client if available (supports service account OAuth too)
+        try:
+            # attempt to import google.genai (newer package) or google.generativeai
+            try:
+                from google import genai
+                client_lib = "genai"
+            except Exception:
+                import google
+                # some older installs expose generativeai
+                from google import generativeai as genai
+                client_lib = "generativeai"
+
+            # Configure the library. If GEMINI_API_KEY provided, set it; otherwise library may use ADC.
+            try:
+                # both libs typically expose configure or similar
+                if hasattr(genai, "configure"):
+                    genai.configure(api_key=api_key)
+                elif hasattr(genai, "Client"):
+                    # hypothetical alternative
+                    genai.Client(api_key=api_key)
+            except Exception:
+                # ignore configuration errors — fallback to REST if call fails
+                pass
+
+            # Try a generate call with the client library
+            try:
+                # Preferred call shape for google.genai
+                if client_lib == "genai" and hasattr(genai, "generate_text"):
+                    resp = genai.generate_text(model=model_map.get(model, "models/text-bison-001"), prompt=prompt)
+                    # extract text safely
+                    if isinstance(resp, dict) and "candidates" in resp:
+                        return resp["candidates"][0].get("content", "")
+                    # library may return object with .text
+                    if hasattr(resp, "text"):
+                        return getattr(resp, "text")
+                # Fallback no-library path continues to REST below
+            except Exception:
+                # fallthrough to REST
+                pass
+        except Exception:
+            # library import/config failed — fall back to REST
+            pass
+
         return _call_gemini_api(prompt, api_key, model=model)
     except Exception as e:
         raise LLMError(f"Erro ao chamar LLM: {e}")

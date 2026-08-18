@@ -68,8 +68,50 @@ def manage_products(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def generate_sheet(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Gerar planilha/Power Query M template."""
-    return {"status": "ok", "action": "generate_sheet", "params": params}
+    """Gerar planilha/Power Query M template a partir de um CSV.
+
+    Params esperados (opcionais):
+      - source: caminho para o CSV de entrada. Se não fornecido busca o último CSV em ./data/orders_*.csv
+      - output: caminho para salvar o template (.m ou .pq)
+
+    O template gerado é um exemplo M (Power Query) que carrega o CSV,
+    promove cabeçalhos e tenta converter tipos básicos.
+    """
+    import glob
+    import os as _os
+    from datetime import datetime
+
+    source = None
+    if isinstance(params, dict):
+        source = params.get("source")
+    # Procurar último CSV em ./data se source não fornecido
+    if not source:
+        files = sorted(glob.glob("./data/orders_*.csv"), reverse=True)
+        if files:
+            source = files[0]
+    if not source:
+        return {"status": "error", "message": "Nenhum CSV fonte encontrado. Forneça params.source ou coloque ./data/orders_*.csv"}
+
+    # Gera conteúdo M
+    # Observação: path deve ser escapado para M; usaremos caminho relativo.
+    m_template = f'''let
+    Fonte = Csv.Document(File.Contents("{source}"), [Delimiter=",", Columns=null, Encoding=65001, QuoteStyle=QuoteStyle.Csv]),
+    PromotedHeaders = Table.PromoteHeaders(Fonte, [PromoteAllScalars=true]),
+    ChangedTypes = Table.TransformColumnTypes(PromotedHeaders, List.Transform(Table.ColumnNames(PromotedHeaders), each {"{"}#, type nullable text{"}"}))
+in
+    ChangedTypes'''
+
+    _os.makedirs("./data", exist_ok=True)
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    output = params.get("output") if isinstance(params, dict) else None
+    if not output:
+        output = f"./data/powerquery_template_{ts}.m"
+
+    with open(output, "w", encoding="utf-8") as f:
+        f.write(m_template)
+
+    return {"status": "ok", "action": "generate_sheet", "path": output, "source": source}
+
 
 
 def build_dashboard(params: Dict[str, Any]) -> Dict[str, Any]:
