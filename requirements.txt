@@ -12,3 +12,14 @@ speechrecognition
 pywebview
 cryptography
 google-genai
+tavily-python
+google-generativeai
+pandasbeautifulsoup4
+playwright
+selenium
+numpy
+scipy
+scikit-learn
+pandas
+openpyxl
+xlrd
