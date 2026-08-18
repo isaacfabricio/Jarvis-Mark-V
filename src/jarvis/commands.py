@@ -29,11 +29,35 @@ def execute_intent(intent: str, params: Dict[str, Any]) -> Dict[str, Any]:
 # Stubs — implementar conforme as necessidades
 
 def fetch_orders(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Buscar pedidos — placeholder.
+    """Buscar pedidos — placeholder que gera um CSV de exemplo.
 
     Parâmetros esperados (exemplos): from, to, status
+    O handler cria um arquivo CSV em ./data/ e retorna o caminho para o usuário.
     """
-    return {"status": "ok", "action": "fetch_orders", "params": params}
+    import csv
+    import os
+    from datetime import datetime
+
+    os.makedirs("./data", exist_ok=True)
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    filename = f"./data/orders_{ts}.csv"
+
+    # Exemplo de conteúdo — em produção isso viria da API Shein
+    rows = [
+        {"order_id": "1001", "date": "2026-08-10", "status": "shipped", "total": "49.90"},
+        {"order_id": "1002", "date": "2026-08-12", "status": "processing", "total": "89.00"},
+        {"order_id": "1003", "date": "2026-08-15", "status": "delivered", "total": "15.25"},
+    ]
+
+    fieldnames = ["order_id", "date", "status", "total"]
+    with open(filename, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in rows:
+            writer.writerow(r)
+
+    return {"status": "ok", "action": "fetch_orders", "path": filename, "rows": len(rows), "params": params}
+
 
 
 def manage_products(params: Dict[str, Any]) -> Dict[str, Any]:

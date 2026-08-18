@@ -26,7 +26,15 @@ def run(command: str):
     typer.echo(f"Interpretando comando: {command}")
     intent = interpret_command(command)
     typer.echo(f"Intent detectada: {intent}")
-    # aqui será chamado o mapeamento para executar a intent
+    # despacha a intent para os comandos implementados
+    from .commands import execute_intent
+    if isinstance(intent, dict):
+        result = execute_intent(intent.get("intent", "unknown"), intent.get("params", {}))
+    else:
+        # Caso a NLU retorne string inesperada
+        result = execute_intent(str(intent), {})
+    typer.echo("Resultado:")
+    typer.echo(result)
 
 
 @app.command()
@@ -49,7 +57,13 @@ def listen():
             raise typer.Exit()
         intent = interpret_command(text)
         typer.echo(f"Intent: {intent}")
-        # TODO: despachar intent para módulo executor
+        from .commands import execute_intent
+        if isinstance(intent, dict):
+            result = execute_intent(intent.get("intent", "unknown"), intent.get("params", {}))
+        else:
+            result = execute_intent(str(intent), {})
+        typer.echo("Resultado:")
+        typer.echo(result)
 
 
 if __name__ == "__main__":

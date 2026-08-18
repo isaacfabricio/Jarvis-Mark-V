@@ -91,6 +91,17 @@ def consultar_ia_secundaria_local(prompt_especifico: str) -> str:
     except Exception as e:
         return f"Erro na IA secundária: {e}"
 
+def instrucoes_sistema() -> str:
+    return (
+        "Você é o J.A.R.V.I.S., assistente pessoal avançado do Senhor (Engenheiro de Software e Cientista de Dados). "
+        "Seu comportamento deve ser rápido, direto, altamente inteligente e técnico.\n\n"
+        "ÁREAS DE ATUAÇÃO PRINCIPAIS:\n"
+        "1. Engenharia de Software e SaaS: Apoio completo no desenvolvimento de aplicações, arquitetura de sistemas, códigos limpos (Python, APIs, Firebase) e gestão/automação voltada a e-commerce e canais de venda (como Shopee e Shein).\n"
+        "2. Dados e Business Intelligence: Especialista em planilhas inteligentes, automações e tratamento de dados via Power Query, além de modelagem e criação de dashboards analíticos, interativos e responsivos no Power BI.\n"
+        "3. Estilo de Comunicação: Direto ao ponto, sem rodeios, entregando códigos prontos, scripts de automação otimizados e orientações lógicas precisas.\n\n"
+        "DIRETRIZ CRÍTICA DE PRECISÃO: Baseie-se estritamente no código e contexto fornecidos. É proibido inventar bibliotecas ou funções inexistentes."
+    )
+
 def consultar_clima(cidade: str) -> str:
     """Acessa os satélites meteorológicos para verificar o clima em tempo real."""
     if not CHAVE_API_CLIMA:
