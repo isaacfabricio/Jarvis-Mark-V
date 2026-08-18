@@ -15,6 +15,18 @@ from .nlu import interpret_command
 app = typer.Typer()
 
 
+# Subcomando para web-search direto via CLI
+@app.command()
+def web_search(query: str, simulate: bool = typer.Option(False, "--simulate", "Executar em modo simulado sem Tavily")):
+    """Executa uma busca web (usa Tavily)."""
+    from .commands import web_search as _web_search
+    params = {"query": query, "simulate": simulate}
+    result = _web_search(params)
+    typer.echo("Resultado:")
+    typer.echo(result)
+
+
+
 @app.command()
 def run(command: str):
     """Executa um único comando em linguagem natural."""

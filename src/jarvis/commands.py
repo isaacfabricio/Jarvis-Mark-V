@@ -96,5 +96,34 @@ def web_search(params: Dict[str, Any]) -> Dict[str, Any]:
         else:
             return {"status": "error", "message": "Nenhuma query fornecida para web_search"}
 
-    return buscar_na_web(query)
+    # detecta simulate pela params ou pela variável de ambiente JARVIS_SIMULATE
+    simulate = params.get("simulate") if isinstance(params, dict) and "simulate" in params else (os.getenv("JARVIS_SIMULATE") == "1")
+    resp = buscar_na_web(query, simulate=simulate)
+
+    # Se erro, propaga
+    if resp.get("status") != "ok":
+        return resp
+
+    # Formatar e salvar resultado em ./data/search_<ts>.json
+    import json
+    from datetime import datetime
+    import os as _os
+
+    _os.makedirs("./data", exist_ok=True)
+    ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    filename = f"./data/search_{ts}.json"
+    out = {"query": query, "timestamp": ts, "results": resp.get("results")}
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, indent=2)
+
+    # Preparar uma versão resumida para retorno imediato
+    summary = []
+    for r in resp.get("results", []):
+        url = r.get("url")
+        content = r.get("content", "")
+        snippet = content[:200].replace("\n", " ")
+        summary.append({"url": url, "snippet": snippet})
+
+    return {"status": "ok", "action": "web_search", "path": filename, "summary": summary}
+
 

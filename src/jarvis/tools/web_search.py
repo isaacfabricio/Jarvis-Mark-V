@@ -8,12 +8,22 @@ import os
 from typing import Any, Dict, List
 
 
-def buscar_na_web(pergunta: str) -> Dict[str, Any]:
+def buscar_na_web(pergunta: str, *, simulate: bool = False) -> Dict[str, Any]:
     """Realiza uma busca usando a biblioteca tavily-python.
 
-    Requer a variável de ambiente TAVILY_API_KEY definida.
+    Requer a variável de ambiente TAVILY_API_KEY definida, a menos que simulate=True.
     Retorna um dicionário: {status: 'ok'|'error', results: [...]}.
     """
+    if simulate:
+        # Resposta simulada para testes locais
+        sample = {
+            "results": [
+                {"url": "https://example.com/article-1", "content": f"Resumo simulado da pesquisa sobre: {pergunta}. Texto de exemplo 1."},
+                {"url": "https://example.com/article-2", "content": f"Outro resultado simulado referente a: {pergunta}. Texto de exemplo 2."},
+            ]
+        }
+        return {"status": "ok", "results": sample["results"]}
+
     try:
         from tavily import TavilyClient
     except Exception as e:
