@@ -1,0 +1,4 @@
+order_id,date,status,total
+1001,2026-08-10,shipped,49.90
+1002,2026-08-12,processing,89.00
+1003,2026-08-15,delivered,15.25

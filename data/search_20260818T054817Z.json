@@ -1,0 +1,14 @@
+{
+  "query": "buscar na web notícias sobre Shein",
+  "timestamp": "20260818T054817Z",
+  "results": [
+    {
+      "url": "https://example.com/article-1",
+      "content": "Resumo simulado da pesquisa sobre: buscar na web notícias sobre Shein. Texto de exemplo 1."
+    },
+    {
+      "url": "https://example.com/article-2",
+      "content": "Outro resultado simulado referente a: buscar na web notícias sobre Shein. Texto de exemplo 2."
+    }
+  ]
+}
