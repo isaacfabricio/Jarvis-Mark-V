@@ -29,11 +29,11 @@ Você é um assistente que extrai uma única intent e parâmetros de um comando 
 Responda EXCLUSIVAMENTE com um objeto JSON válido. Não inclua explicações.
 O objeto deve ter as chaves: "intent" (snake_case) e "params" (objeto).
 Campos possíveis para intent: fetch_orders, manage_products, generate_sheet, build_dashboard, web_search, unknown.
-Se não conseguir determinar a intenção, retorne: {"intent": "unknown", "params": {}}.
+Se não conseguir determinar a intenção, retorne: {{"intent": "unknown", "params": {{}}}}.
 Se a frase contém um verbo de busca como "buscar", "pesquisar", "procurar", prefira a intent "web_search" e coloque a query no params.query.
 Exemplos de saída (JSON somente):
-{"intent": "fetch_orders", "params": {"from":"2026-08-01","to":"2026-08-18"}}
-{"intent": "web_search", "params": {"query":"preço do produto X"}}
+{{"intent": "fetch_orders", "params": {{"from":"2026-08-01","to":"2026-08-18"}}}}
+{{"intent": "web_search", "params": {{"query":"preço do produto X"}}}}
 
 User command: "{text}"
 """
@@ -84,15 +84,15 @@ def _heuristic_fallback(text: str) -> Dict[str, Any]:
     t = text.lower()
     if "pedido" in t or "pedidos" in t or "order" in t:
         return {"intent": "fetch_orders", "params": {}}
+    # Heurística para busca web (prioritária sobre 'produto')
+    if any(k in t for k in ("buscar", "pesquisar", "pesquisa", "procurar", "pesquise", "buscar na web", "pesquise na web")):
+        # tenta extrair a parte após o verbo (ex.: "buscar na web preço do produto x")
+        # simplificação: enviar a frase completa como query
+        return {"intent": "web_search", "params": {"query": text}}
     if "produto" in t or "produtos" in t:
         return {"intent": "manage_products", "params": {}}
     if "planilha" in t or "excel" in t or "power query" in t:
         return {"intent": "generate_sheet", "params": {}}
     if "dashboard" in t or "power bi" in t:
         return {"intent": "build_dashboard", "params": {}}
-    # Heurística para busca web
-    if any(k in t for k in ("buscar", "pesquisar", "pesquisa", "procurar", "pesquise", "buscar na web", "pesquise na web")):
-        # tenta extrair a parte após o verbo (ex.: "buscar na web preço do produto x")
-        # simplificação: enviar a frase completa como query
-        return {"intent": "web_search", "params": {"query": text}}
     return {"intent": "unknown", "params": {}}
