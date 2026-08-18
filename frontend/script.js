@@ -37,6 +37,16 @@ ws.onmessage = (event) => {
     if (st) st.innerText = data.status;
     document.body.dataset.status = data.status.toLowerCase();
   }
+
+  // Quando JARVIS enviar um evento de voz, pedir ao servidor para sintetizar e reproduzir
+  if (data.type === 'jarvis' && data.acao === 'falar' && data.log) {
+    // Use server TTS for consistent voice. Falls back to client speechSynthesis if server fails.
+    try {
+      jarvisSpeakServer(data.log).catch(()=> jarvisFalar(data.log));
+    } catch (e) {
+      jarvisFalar(data.log);
+    }
+  }
 };
 
 ws.onopen = () => {

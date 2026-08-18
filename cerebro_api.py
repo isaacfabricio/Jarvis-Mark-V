@@ -4,13 +4,13 @@ J.A.R.V.I.S. Core API - Mark V Secure (Com Clima e IA Integrados)
 import os
 import json
 import logging
-import asyncio
 import time
 import requests
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn # pyright: ignore[reportMissingImports]
 from google import genai
 from google.genai import types
 from cryptography.fernet import Fernet
@@ -55,6 +55,28 @@ if not os.path.exists(VAULT_DIR):
 app = FastAPI(title="J.A.R.V.I.S. Core API", version="Mark V Secure")
 conexoes_ativas = []
 
+# CORS
+_default_origins = os.getenv("CORS_ORIGINS", "http://localhost:8000").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_default_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Simple in-memory rate limiter (per-token or per-IP)
+RATE_LIMIT = int(os.getenv("RATE_LIMIT_PER_MIN", "30"))  # requests per minute
+RATE_WINDOW = 60
+RATE_STATE: dict = {}
+
+
+audit_logger = logging.getLogger("jarvis_audit")
+if not audit_logger.handlers:
+    fh = logging.FileHandler("jarvis_audit.log")
+    fh.setLevel(logging.INFO)
+    audit_logger.addHandler(fh)
+
 MATRIZ_PERSONALIDADE = {
     "humor": 10,       
     "honestidade": 100, 
@@ -90,6 +112,20 @@ def consultar_ia_secundaria_local(prompt_especifico: str) -> str:
         return "IA secundária offline."
     except Exception as e:
         return f"Erro na IA secundária: {e}"
+
+
+def _check_rate_limit(token_or_ip: str) -> (bool, int):
+    """Verifica e atualiza o contador de requisições. Retorna (ok, retry_after_seconds)."""
+    now = int(time.time())
+    state = RATE_STATE.get(token_or_ip)
+    if not state or now > state.get("reset", 0):
+        RATE_STATE[token_or_ip] = {"count": 1, "reset": now + RATE_WINDOW}
+        return True, 0
+    if state["count"] >= RATE_LIMIT:
+        retry = state["reset"] - now
+        return False, retry
+    state["count"] += 1
+    return True, 0
 
 def instrucoes_sistema() -> str:
     return (
@@ -153,55 +189,6 @@ app.mount("/static", StaticFiles(directory="frontend"), name="static")
 @app.get("/")
 async def get_interface():
     return FileResponse("frontend/index.html")
-
-
-# Rota para sintetizar áudio a partir de texto (gera MP3 usando edge-tts)
-from fastapi import Request, HTTPException
-
-@app.post("/api/speak")
-async def api_speak(request: Request):
-    """Recebe JSON {"text": "texto a falar", "voice": "opcional", "format": "mp3|wav"}
-    Retorna o binário do áudio (audio/mpeg). Usa edge-tts quando disponível.
-    """
-    try:
-        data = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="JSON inválido no corpo da requisição")
-
-    text = data.get("text")
-    if not text:
-        raise HTTPException(status_code=400, detail="Campo 'text' é obrigatório")
-    voice = data.get("voice", "pt-BR-AntonioNeural")
-    fmt = data.get("format", "mp3")
-
-    # Verifica disponibilidade do edge-tts
-    try:
-        import edge_tts
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"edge-tts não está disponível: {e}")
-
-    import tempfile
-    import os
-
-    suffix = ".mp3" if fmt == "mp3" else ".wav"
-    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-    tmp_name = tmp.name
-    tmp.close()
-
-    try:
-        # edge-tts suporta save async
-        communicate = edge_tts.Communicate(text, voice)
-        await communicate.save(tmp_name)
-    except Exception as e:
-        # cleanup
-        try:
-            os.unlink(tmp_name)
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Falha na síntese de voz: {e}")
-
-    media_type = "audio/mpeg" if suffix == ".mp3" else "audio/wav"
-    return FileResponse(tmp_name, media_type=media_type, filename=f"jarvis{suffix}")
 
 CONTROLE_BATERIA = {}
 

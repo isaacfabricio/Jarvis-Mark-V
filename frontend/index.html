@@ -11,7 +11,13 @@
     <title>JARVIS // Interface de Comando</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div style="position:fixed;right:16px;bottom:16px;z-index:999;">
+        <button id="voice-btn" onclick="window.habilitarComandoPorVoz && window.habilitarComandoPorVoz()" style="padding:10px 14px;border-radius:8px;background:#00f3ff;color:#001">
+          🎤 Falar com J.A.R.V.I.S.
+        </button>
+      </div>
+    </div>
     <script src="/script.js"></script>
     <script defer src="%VITE_ANALYTICS_ENDPOINT%/umami" data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
