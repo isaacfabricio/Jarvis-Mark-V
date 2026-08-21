@@ -381,6 +381,33 @@ async def websocket_endpoint(websocket: WebSocket, token_acesso: str):
             data = await websocket.receive_text()
             mensagem = json.loads(data)
 
+            # Tool invocation via WebSocket: {"tool": "ecommerce", "plataforma":"shein", "termo":"camiseta"}
+            if mensagem.get("tool") == "ecommerce":
+                plataforma = mensagem.get("plataforma", "shein")
+                termo = mensagem.get("termo", "camiseta")
+                try:
+                    resultado = buscar_dados_catalogo_ecommerce(plataforma, termo)
+                    try:
+                        payload = json.loads(resultado)
+                    except Exception:
+                        payload = resultado
+                    await websocket.send_json({"type": "tool_result", "tool": "ecommerce", "result": payload})
+                except Exception as e:
+                    await websocket.send_json({"type": "tool_result", "tool": "ecommerce", "error": str(e)})
+                continue
+
+            if mensagem.get("tool") == "etl":
+                caminho = mensagem.get("path")
+                if not caminho:
+                    await websocket.send_json({"type": "tool_result", "tool": "etl", "error": "missing 'path'"})
+                    continue
+                try:
+                    resultado = executar_pipeline_etl_csv(caminho)
+                    await websocket.send_json({"type": "tool_result", "tool": "etl", "result": resultado})
+                except Exception as e:
+                    await websocket.send_json({"type": "tool_result", "tool": "etl", "error": str(e)})
+                continue
+
             comando = mensagem.get("comando")
             if comando:
                 logger.info(f"[COMANDO]: {comando}")
@@ -415,6 +442,41 @@ async def websocket_endpoint(websocket: WebSocket, token_acesso: str):
 @app.get("/api/telemetry")
 async def api_telemetry():
     return get_system_telemetry()
+
+
+from fastapi.responses import JSONResponse
+
+# HTTP endpoint to trigger e-commerce catalog fetch
+@app.get("/api/ecommerce/catalog")
+async def api_ecommerce_catalog(plataforma: str = "shein", termo: str = "camiseta"):
+    try:
+        resultado = buscar_dados_catalogo_ecommerce(plataforma, termo)
+        try:
+            payload = json.loads(resultado)
+        except Exception:
+            payload = {"raw": resultado}
+        return JSONResponse(content={"status": "ok", "data": payload})
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+
+
+# HTTP endpoint to run ETL pipeline on a CSV path
+@app.post("/api/etl/run")
+async def api_etl_run(request: Request):
+    body = await request.json()
+    caminho = body.get("path")
+    if not caminho:
+        return JSONResponse(content={"status": "error", "message": "Missing 'path' in JSON body"}, status_code=400)
+    try:
+        resultado = executar_pipeline_etl_csv(caminho)
+        # executar_pipeline_etl_csv returns a string summary; try to parse if JSON-like
+        try:
+            parsed = json.loads(resultado)
+        except Exception:
+            parsed = resultado
+        return JSONResponse(content={"status": "ok", "result": parsed})
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
 
 async def transmitir_evento(mensagem: dict):
