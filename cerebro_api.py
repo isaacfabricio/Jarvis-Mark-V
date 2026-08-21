@@ -541,11 +541,8 @@ async def websocket_endpoint(websocket: WebSocket, token_acesso: str):
                 plataforma = mensagem.get("plataforma", "shein")
                 termo = mensagem.get("termo", "camiseta")
                 try:
-                    resultado = buscar_dados_catalogo_ecommerce(plataforma, termo)
-                    try:
-                        payload = json.loads(resultado)
-                    except Exception:
-                        payload = resultado
+                    resultado = _cached_tool_call(buscar_dados_catalogo_ecommerce, plataforma, termo)
+                    payload = resultado
                     await websocket.send_json({"type": "tool_result", "tool": "ecommerce", "result": payload})
                 except Exception as e:
                     await websocket.send_json({"type": "tool_result", "tool": "ecommerce", "error": str(e)})
@@ -730,6 +727,103 @@ async def api_etl_status(job_id: str, request: Request):
 async def api_etl_result(job_id: str, request: Request):
     # alias to status for now
     return await api_etl_status(job_id, request)
+
+
+# Fetch a public dataset (CSV) by URL and run ETL on it. Background job with token auth.
+@app.post("/api/datasets/fetch")
+async def api_datasets_fetch(request: Request):
+    _verify_token_in_request(request)
+    body = await request.json()
+    url = body.get("url")
+    if not url:
+        return JSONResponse(content={"status": "error", "message": "Missing 'url' in JSON body"}, status_code=400)
+
+    # create job id and paths
+    job_id = uuid4().hex
+    datasets_dir = os.path.join("data", "datasets")
+    os.makedirs(datasets_dir, exist_ok=True)
+
+    # derive filename safely
+    try:
+        fname = os.path.basename(url.split('?')[0]) or f"dataset_{job_id}.csv"
+        # limit filename length
+        if len(fname) > 200:
+            fname = fname[-200:]
+        dest_path = os.path.join(datasets_dir, f"{job_id}_" + fname)
+    except Exception:
+        dest_path = os.path.join(datasets_dir, f"{job_id}_dataset.csv")
+
+    # register as queued job (reuse etl job keys)
+    key = f"etl:job:{job_id}"
+    if redis_client:
+        try:
+            redis_client.hset(key, mapping={"status": "queued", "source_url": url})
+            redis_client.lpush("etl:queue", job_id)
+        except Exception as e:
+            logger.warning(f"Redis enqueue failed for dataset fetch: {e}")
+            with open(os.path.join(ETL_RESULTS_DIR, f"{job_id}.json"), "w", encoding="utf-8") as f:
+                json.dump({"status": "queued", "source_url": url}, f, ensure_ascii=False)
+    else:
+        with open(os.path.join(ETL_RESULTS_DIR, f"{job_id}.json"), "w", encoding="utf-8") as f:
+            json.dump({"status": "queued", "source_url": url}, f, ensure_ascii=False)
+
+    async def _download_and_process(job_id_inner: str, source_url: str, dest: str):
+        key_inner = f"etl:job:{job_id_inner}"
+        # update status
+        if redis_client:
+            try:
+                redis_client.hset(key_inner, mapping={"status": "downloading"})
+            except Exception:
+                pass
+        else:
+            with open(os.path.join(ETL_RESULTS_DIR, f"{job_id_inner}.json"), "w", encoding="utf-8") as f:
+                json.dump({"status": "downloading", "source_url": source_url}, f, ensure_ascii=False)
+
+        try:
+            # stream download
+            with requests.get(source_url, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                with open(dest, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+
+            # after download, run the ETL job pipeline
+            if redis_client:
+                try:
+                    redis_client.hset(key_inner, mapping={"status": "processing", "path": dest})
+                except Exception:
+                    pass
+            else:
+                with open(os.path.join(ETL_RESULTS_DIR, f"{job_id_inner}.json"), "w", encoding="utf-8") as f:
+                    json.dump({"status": "processing", "path": dest}, f, ensure_ascii=False)
+
+            # call ETL (synchronous) and store result
+            resultado = executar_pipeline_etl_csv(dest)
+            entry = {"status": "done", "result": resultado, "path": dest}
+            if redis_client:
+                try:
+                    redis_client.hset(key_inner, mapping={"status": "done", "result": json.dumps(resultado, ensure_ascii=False)})
+                except Exception:
+                    pass
+            else:
+                with open(os.path.join(ETL_RESULTS_DIR, f"{job_id_inner}.json"), "w", encoding="utf-8") as f:
+                    json.dump(entry, f, ensure_ascii=False)
+        except Exception as e:
+            entry = {"status": "error", "error": str(e)}
+            if redis_client:
+                try:
+                    redis_client.hset(key_inner, mapping={"status": "error", "error": str(e)})
+                except Exception:
+                    pass
+            else:
+                with open(os.path.join(ETL_RESULTS_DIR, f"{job_id_inner}.json"), "w", encoding="utf-8") as f:
+                    json.dump(entry, f, ensure_ascii=False)
+
+    # schedule background downloader + ETL
+    asyncio.create_task(_download_and_process(job_id, url, dest_path))
+
+    return JSONResponse(content={"status": "ok", "job_id": job_id, "path": dest_path})
 
 
 async def transmitir_evento(mensagem: dict):
