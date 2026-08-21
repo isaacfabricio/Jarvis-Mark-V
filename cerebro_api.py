@@ -143,18 +143,28 @@ RATE_STATE: dict = {}
 # Optional Redis-based rate limiter
 REDIS_URL = os.getenv('REDIS_URL')
 redis_client = None
+# If no REDIS_URL provided, attempt to use REDIS_HOST/REDIS_PORT, else assume local redis
 if not REDIS_URL:
-    # Try separate host/port
     REDIS_HOST = os.getenv('REDIS_HOST')
     REDIS_PORT = os.getenv('REDIS_PORT')
     if REDIS_HOST and REDIS_PORT:
         REDIS_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+    else:
+        # best-effort local fallback — only used when container/host exposes Redis locally
+        REDIS_URL = os.getenv('REDIS_URL_FALLBACK', "redis://127.0.0.1:6379/0")
 
 if REDIS_URL:
     try:
-        import redis # type: ignore
-        redis_client = redis.from_url(REDIS_URL, decode_responses=False)
-        logger.info(f"Redis rate limiter enabled via {REDIS_URL}")
+        import redis as _redis  # type: ignore
+        # Use a short connect attempt to validate availability
+        redis_client = _redis.from_url(REDIS_URL, decode_responses=False)
+        # Try a ping to confirm connectivity
+        try:
+            redis_client.ping()
+            logger.info(f"Redis rate limiter enabled via {REDIS_URL}")
+        except Exception as e:
+            logger.warning(f"Redis ping failed: {e}")
+            redis_client = None
     except Exception as e:
         logger.warning(f"Redis not available for rate limiting: {e}")
         redis_client = None
@@ -214,6 +224,37 @@ def salvar_memoria_criptografada(titulo: str, conteudo: str) -> str:
     with open(caminho, "wb") as f:
         f.write(conteudo_selado)
     return f"Memória selada com segurança AES-256 no arquivo {nome_arquivo}."
+
+
+# Vault HTTP endpoints (require token)
+@app.post("/api/vault/store")
+async def api_vault_store(request: Request):
+    _verify_token_in_request(request)
+    body = await request.json()
+    titulo = body.get("title") or body.get("titulo")
+    conteudo = body.get("content") or body.get("conteudo")
+    if not titulo or not conteudo:
+        return JSONResponse(content={"status": "error", "message": "Missing title or content"}, status_code=400)
+    res = salvar_memoria_criptografada(titulo, conteudo)
+    return JSONResponse(content={"status": "ok", "message": res})
+
+
+@app.get("/api/vault/get/{titulo}")
+async def api_vault_get(titulo: str, request: Request):
+    _verify_token_in_request(request)
+    if cifra is None:
+        return JSONResponse(content={"status": "error", "message": "Vault not configured"}, status_code=500)
+    nome_arquivo = f"{titulo.replace(' ', '_').lower()}.enc"
+    caminho = os.path.join(VAULT_DIR, nome_arquivo)
+    if not os.path.exists(caminho):
+        return JSONResponse(content={"status": "error", "message": "Not found"}, status_code=404)
+    with open(caminho, "rb") as f:
+        selado = f.read()
+    try:
+        conteudo = cifra.decrypt(selado).decode('utf-8')
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "message": f"Decryption failed: {e}"}, status_code=500)
+    return JSONResponse(content={"status": "ok", "title": titulo, "content": conteudo})
 
 def consultar_ia_secundaria_local(prompt_especifico: str) -> str:
     """Consulta um modelo de IA alternativo ou local (via Ollama)."""
