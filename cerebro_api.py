@@ -22,6 +22,32 @@ from logging.handlers import TimedRotatingFileHandler
 from connectors.ecommerce_connector import buscar_dados_catalogo_ecommerce
 from connectors.data_connector import executar_pipeline_etl_csv
 
+# Optional web search tool (Tavily wrapper)
+try:
+    from jarvis.tools.web_search import buscar_na_web
+except Exception:
+    try:
+        # fallback if running from project root without src on path
+        from src.jarvis.tools.web_search import buscar_na_web
+    except Exception:
+        def buscar_na_web(*args, **kwargs):
+            return {"status": "error", "message": "buscar_na_web not available in this environment"}
+
+# Optional agent triggers — these may not exist in all deployments. Provide safe stubs if unavailable.
+try:
+    # prefer a top-level agents package if present
+    from agents import acionar_agente_codigo, acionar_agente_dados_bi, acionar_agente_ecommerce
+except Exception:
+    try:
+        from jarvis.agents import acionar_agente_codigo, acionar_agente_dados_bi, acionar_agente_ecommerce
+    except Exception:
+        def acionar_agente_codigo(*args, **kwargs):
+            return {"status": "error", "message": "acionar_agente_codigo not implemented"}
+        def acionar_agente_dados_bi(*args, **kwargs):
+            return {"status": "error", "message": "acionar_agente_dados_bi not implemented"}
+        def acionar_agente_ecommerce(*args, **kwargs):
+            return {"status": "error", "message": "acionar_agente_ecommerce not implemented"}
+
 try:
     from dotenv import load_dotenv
 except ImportError:
@@ -297,7 +323,11 @@ if CLIENT is not None:
                     ajustar_personalidade,
                     consultar_ia_secundaria_local,
                     buscar_dados_catalogo_ecommerce,  # e-commerce connector
-                    executar_pipeline_etl_csv         # ETL / data connector
+                    executar_pipeline_etl_csv,        # ETL / data connector
+                    buscar_na_web,                    # web search tool (Tavily)
+                    acionar_agente_codigo,            # agent: code actions
+                    acionar_agente_dados_bi,          # agent: BI/data actions
+                    acionar_agente_ecommerce          # agent: e-commerce actions
                 ]
             )
         )
