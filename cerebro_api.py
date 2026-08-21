@@ -13,8 +13,23 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn # pyright: ignore[reportMissingImports]
-from google import genai
-from google.genai import types
+try:
+    # Prefer the newer google.genai package; fall back to older google.generativeai if present.
+    try:
+        from google import genai  # type: ignore
+        from google.genai import types  # type: ignore
+        GENAI_LIB = "genai"
+    except Exception:
+        import google  # type: ignore
+        from google import generativeai as genai  # type: ignore
+        # generativeai may not expose types module; create a lightweight alias
+        types = getattr(genai, "types", None)
+        GENAI_LIB = "generativeai"
+except Exception:
+    genai = None
+    types = None
+    GENAI_LIB = None
+
 from cryptography.fernet import Fernet
 from logging.handlers import TimedRotatingFileHandler
 
@@ -88,17 +103,26 @@ CHAVE_API_CLIMA = os.getenv("WEATHER_API_KEY") or os.getenv("OPENWEATHER_API_KEY
 
 # Inicialização do cliente google-genai (opcional)
 CLIENT = None
-try:
-    if CHAVE_API_GEMINI:
-        try:
+if CHAVE_API_GEMINI and genai is not None:
+    try:
+        if hasattr(genai, "Client"):
             CLIENT = genai.Client(api_key=CHAVE_API_GEMINI)
-            logger.info("Cliente genai inicializado com GEMINI_API_KEY.")
-        except Exception as e:
-            logger.warning(f"Falha ao inicializar genai.Client: {e}")
-    else:
-        logger.info("GEMINI_API_KEY ausente — genai Client não inicializado.")
-except Exception as e:
-    logger.warning(f"Erro ao configurar genai: {e}")
+            logger.info("Cliente genai inicializado com GEMINI_API_KEY via genai.Client.")
+        elif hasattr(genai, "configure"):
+            try:
+                genai.configure(api_key=CHAVE_API_GEMINI)
+                CLIENT = getattr(genai, "Client", None)
+                logger.info("genai configurado via configure(). Client object may be None.")
+            except Exception as e:
+                logger.warning(f"genai.configure failed: {e}")
+        else:
+            logger.warning("genai library loaded but no Client or configure found; will attempt REST fallback.")
+    except Exception as e:
+        logger.warning(f"Falha ao inicializar genai: {e}")
+elif CHAVE_API_GEMINI and genai is None:
+    logger.warning("GEMINI_API_KEY fornecida, mas biblioteca genai não está disponível.")
+else:
+    logger.info("GEMINI_API_KEY ausente — genai Client não inicializado.")
 
 # Inicializar cifra do Vault somente se chave disponível
 cifra = None
@@ -464,34 +488,49 @@ def _cached_tool_call(func, *args, **kwargs):
 
 
 chat = None
-if CLIENT is not None:
-    try:
-        # Configure chat with model selection and token limits set via env vars.
-        chat = CLIENT.chats.create(
-            model=GEMINI_MODEL,
-            config=types.GenerateContentConfig(
-                system_instruction=instrucoes_sistema(),
-                temperature=float(os.getenv("GEMINI_TEMPERATURE", "0.1")),
-                max_output_tokens=GEMINI_MAX_TOKENS,
-                tools=[
-                    salvar_memoria_criptografada,
-                    ajustar_personalidade,
-                    consultar_ia_secundaria_local,
-                    buscar_dados_catalogo_ecommerce,
-                    executar_pipeline_etl_csv,
-                    buscar_na_web,
-                    acionar_agente_codigo,
-                    acionar_agente_dados_bi,
-                    acionar_agente_ecommerce,
-                ],
-            ),
-        )
+try:
+    if CLIENT is not None:
+        # Prepare tools: only include callables
+        candidate_tools = [
+            ("salvar_memoria_criptografada", salvar_memoria_criptografada),
+            ("ajustar_personalidade", ajustar_personalidade),
+            ("consultar_ia_secundaria_local", consultar_ia_secundaria_local),
+            ("buscar_dados_catalogo_ecommerce", buscar_dados_catalogo_ecommerce),
+            ("executar_pipeline_etl_csv", executar_pipeline_etl_csv),
+            ("buscar_na_web", buscar_na_web),
+            ("acionar_agente_codigo", acionar_agente_codigo),
+            ("acionar_agente_dados_bi", acionar_agente_dados_bi),
+            ("acionar_agente_ecommerce", acionar_agente_ecommerce),
+        ]
+        tools_filtered = []
+        missing = []
+        for name, fn in candidate_tools:
+            if callable(fn):
+                tools_filtered.append(fn)
+            else:
+                missing.append(name)
+        if missing:
+            logger.info(f"Algumas ferramentas não estão disponíveis e serão ignoradas: {missing}")
+
+        # Build config; if types is available, use GenerateContentConfig, else pass basic kwargs
+        config_kwargs = {
+            "system_instruction": instrucoes_sistema(),
+            "temperature": float(os.getenv("GEMINI_TEMPERATURE", "0.1")),
+            "max_output_tokens": GEMINI_MAX_TOKENS,
+            "tools": tools_filtered,
+        }
+        if types is not None and hasattr(types, "GenerateContentConfig"):
+            config = types.GenerateContentConfig(**config_kwargs)
+            chat = CLIENT.chats.create(model=GEMINI_MODEL, config=config)
+        else:
+            # Some genai variants accept kwargs directly
+            chat = CLIENT.chats.create(model=GEMINI_MODEL, **config_kwargs)
         logger.info(f"Chat genai criado com sucesso com o modelo {GEMINI_MODEL}.")
-    except Exception as e:
-        logger.warning(f"Falha ao criar chat genai: {e}")
-        chat = None
-else:
-    logger.info("Chat não criado: CLIENT genai indisponível.")
+    else:
+        logger.info("Chat não criado: CLIENT genai indisponível.")
+except Exception as e:
+    logger.warning(f"Falha ao criar chat genai: {e}")
+    chat = None
 
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
