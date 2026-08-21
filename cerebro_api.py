@@ -363,28 +363,130 @@ def instrucoes_sistema() -> str:
     )
 
 # Instancia o chat apenas se o CLIENT foi inicializado com sucesso
+import hashlib
+
+# Model selection and token limits configurable via env for cost control
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+GEMINI_MAX_TOKENS = int(os.getenv("GEMINI_MAX_TOKENS", "256"))
+CACHE_TTL = int(os.getenv("CACHE_TTL_SECS", "3600"))  # seconds
+
+# Simple in-memory cache as fallback
+_RESPONSE_CACHE: dict = {}
+
+def _cache_get(key: str):
+    # Redis-backed cache preferred
+    try:
+        if redis_client:
+            val = redis_client.get(key)
+            if val is None:
+                return None
+            # redis stores bytes; decode
+            if isinstance(val, bytes):
+                return val.decode('utf-8')
+            return val
+    except Exception:
+        pass
+    # in-memory fallback with expiry
+    entry = _RESPONSE_CACHE.get(key)
+    if not entry:
+        return None
+    value, expiry = entry
+    if time.time() > expiry:
+        del _RESPONSE_CACHE[key]
+        return None
+    return value
+
+
+def _cache_set(key: str, value: str, ttl: int = CACHE_TTL):
+    try:
+        if redis_client:
+            redis_client.setex(key, ttl, value)
+            return
+    except Exception:
+        pass
+    _RESPONSE_CACHE[key] = (value, time.time() + ttl)
+
+
+async def _cached_chat_response(prompt: str) -> str:
+    """Cache chat responses to avoid repeated expensive LLM calls."""
+    key = "chat:" + hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+    cached = _cache_get(key)
+    if cached is not None:
+        logger.debug("cache hit for chat prompt")
+        return cached
+
+    if chat is None:
+        # fallback to secondary/local IA
+        try:
+            return consultar_ia_secundaria_local(prompt)
+        except Exception as e:
+            return f"IA não configurada: {e}"
+
+    try:
+        # Use configured model and token limit when creating/generating content
+        resposta = await chat.send_message(prompt)
+        text_to_say = getattr(resposta, 'text', str(resposta))
+        _cache_set(key, text_to_say)
+        return text_to_say
+    except Exception as e:
+        logger.warning(f"LLM call failed: {e}")
+        # fallback to local IA
+        try:
+            return consultar_ia_secundaria_local(prompt)
+        except Exception:
+            return f"Erro na chamada LLM: {e}"
+
+
+def _cached_tool_call(func, *args, **kwargs):
+    key_base = func.__name__ + ":" + ":".join(map(str, args)) + ":" + ":".join(f"{k}={v}" for k, v in kwargs.items())
+    key = "tool:" + hashlib.sha256(key_base.encode('utf-8')).hexdigest()
+    cached = _cache_get(key)
+    if cached is not None:
+        try:
+            return json.loads(cached)
+        except Exception:
+            return cached
+
+    try:
+        res = func(*args, **kwargs)
+        # store as JSON when possible
+        try:
+            to_store = json.dumps(res, ensure_ascii=False)
+        except Exception:
+            to_store = str(res)
+        _cache_set(key, to_store)
+        try:
+            return json.loads(to_store)
+        except Exception:
+            return to_store
+    except Exception as e:
+        raise
+
+
 chat = None
 if CLIENT is not None:
     try:
+        # Configure chat with model selection and token limits set via env vars.
         chat = CLIENT.chats.create(
-            model="gemini-1.5-flash",
+            model=GEMINI_MODEL,
             config=types.GenerateContentConfig(
                 system_instruction=instrucoes_sistema(),
-                temperature=0.1,
+                temperature=float(os.getenv("GEMINI_TEMPERATURE", "0.1")),
+                max_output_tokens=GEMINI_MAX_TOKENS,
                 tools=[
                     salvar_memoria_criptografada,
                     ajustar_personalidade,
                     consultar_ia_secundaria_local,
-                    buscar_dados_catalogo_ecommerce,  # e-commerce connector
-                    executar_pipeline_etl_csv,        # ETL / data connector
-                    buscar_na_web,                    # web search tool (Tavily)
-                    acionar_agente_codigo,            # agent: code actions
-                    acionar_agente_dados_bi,          # agent: BI/data actions
-                    acionar_agente_ecommerce          # agent: e-commerce actions
-                ]
-            )
+                    buscar_dados_catalogo_ecommerce,
+                    executar_pipeline_etl_csv,
+                    buscar_na_web,
+                    acionar_agente_codigo,
+                    acionar_agente_dados_bi,
+                    acionar_agente_ecommerce,
+                ],
+            ),
         )
-        logger.info("Chat genai criado com sucesso.")
+        logger.info(f"Chat genai criado com sucesso com o modelo {GEMINI_MODEL}.")
     except Exception as e:
         logger.warning(f"Falha ao criar chat genai: {e}")
         chat = None
@@ -469,8 +571,8 @@ async def websocket_endpoint(websocket: WebSocket, token_acesso: str):
                 try:
                     diretriz = f"[DIRETRIZ - Humor: {MATRIZ_PERSONALIDADE['humor']}%, Honestidade: {MATRIZ_PERSONALIDADE['honestidade']}%, Sarcasmo: {MATRIZ_PERSONALIDADE['sarcasmo']}%]\n"
                     if chat is not None:
-                        resposta = await chat.send_message(diretriz + comando)
-                        text_to_say = getattr(resposta, 'text', str(resposta))
+                        # Use cached chat response to reduce LLM calls
+                        text_to_say = await _cached_chat_response(diretriz + comando)
                     else:
                         # fallback para IA local externa ou mensagem padrão
                         try:
