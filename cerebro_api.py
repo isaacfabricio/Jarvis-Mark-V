@@ -472,23 +472,121 @@ async def api_ecommerce_catalog(plataforma: str = "shein", termo: str = "camiset
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
 
-# HTTP endpoint to run ETL pipeline on a CSV path
+# Simple token verification for critical routes
+from uuid import uuid4
+
+def _verify_token_in_request(request: Request):
+    auth = request.headers.get("Authorization") or request.headers.get("X-JARVIS-TOKEN")
+    if not auth:
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    # Support 'Bearer <token>' and raw token
+    if auth.startswith("Bearer "):
+        token = auth.split(" ", 1)[1]
+    else:
+        token = auth
+    if TOKEN_AUTENTICACAO and token != TOKEN_AUTENTICACAO:
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+
+# Background ETL job processing with optional Redis-backed status storage
+ETL_RESULTS_DIR = "./data/etl_results"
+os.makedirs(ETL_RESULTS_DIR, exist_ok=True)
+
+async def _process_etl_job(job_id: str, path: str):
+    key = f"etl:job:{job_id}"
+    # update status
+    if redis_client:
+        try:
+            redis_client.hset(key, mapping={"status": "running"})
+        except Exception:
+            pass
+    else:
+        with open(os.path.join(ETL_RESULTS_DIR, f"{job_id}.json"), "w", encoding="utf-8") as f:
+            json.dump({"status": "running"}, f, ensure_ascii=False)
+    try:
+        resultado = executar_pipeline_etl_csv(path)
+        # store result
+        entry = {"status": "done", "result": resultado}
+        if redis_client:
+            try:
+                redis_client.hset(key, mapping={"status": "done", "result": json.dumps(resultado, ensure_ascii=False)})
+            except Exception:
+                pass
+        else:
+            with open(os.path.join(ETL_RESULTS_DIR, f"{job_id}.json"), "w", encoding="utf-8") as f:
+                json.dump(entry, f, ensure_ascii=False)
+    except Exception as e:
+        entry = {"status": "error", "error": str(e)}
+        if redis_client:
+            try:
+                redis_client.hset(key, mapping={"status": "error", "error": str(e)})
+            except Exception:
+                pass
+        else:
+            with open(os.path.join(ETL_RESULTS_DIR, f"{job_id}.json"), "w", encoding="utf-8") as f:
+                json.dump(entry, f, ensure_ascii=False)
+
+
 @app.post("/api/etl/run")
 async def api_etl_run(request: Request):
+    # token verification
+    _verify_token_in_request(request)
     body = await request.json()
     caminho = body.get("path")
     if not caminho:
         return JSONResponse(content={"status": "error", "message": "Missing 'path' in JSON body"}, status_code=400)
-    try:
-        resultado = executar_pipeline_etl_csv(caminho)
-        # executar_pipeline_etl_csv returns a string summary; try to parse if JSON-like
+
+    job_id = uuid4().hex
+    key = f"etl:job:{job_id}"
+    # enqueue (or mark queued)
+    if redis_client:
         try:
-            parsed = json.loads(resultado)
-        except Exception:
-            parsed = resultado
-        return JSONResponse(content={"status": "ok", "result": parsed})
-    except Exception as e:
-        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+            redis_client.hset(key, mapping={"status": "queued", "path": caminho})
+            redis_client.lpush("etl:queue", job_id)
+        except Exception as e:
+            logger.warning(f"Redis enqueue failed: {e}")
+            # fallback to file
+            with open(os.path.join(ETL_RESULTS_DIR, f"{job_id}.json"), "w", encoding="utf-8") as f:
+                json.dump({"status": "queued", "path": caminho}, f, ensure_ascii=False)
+    else:
+        with open(os.path.join(ETL_RESULTS_DIR, f"{job_id}.json"), "w", encoding="utf-8") as f:
+            json.dump({"status": "queued", "path": caminho}, f, ensure_ascii=False)
+
+    # start background processing task in this process (acts as worker)
+    asyncio.create_task(_process_etl_job(job_id, caminho))
+
+    return JSONResponse(content={"status": "ok", "job_id": job_id})
+
+
+@app.get("/api/etl/status/{job_id}")
+async def api_etl_status(job_id: str, request: Request):
+    _verify_token_in_request(request)
+    key = f"etl:job:{job_id}"
+    if redis_client:
+        try:
+            data = redis_client.hgetall(key)
+            if not data:
+                raise HTTPException(status_code=404, detail="Job not found")
+            # decode bytes if necessary
+            decoded = {k.decode() if isinstance(k, bytes) else k: (v.decode() if isinstance(v, bytes) else v) for k, v in data.items()}
+            return JSONResponse(content={"status": "ok", "job": decoded})
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Redis read error: {e}")
+    # fallback to file
+    path = os.path.join(ETL_RESULTS_DIR, f"{job_id}.json")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            j = json.load(f)
+        return JSONResponse(content={"status": "ok", "job": j})
+    raise HTTPException(status_code=404, detail="Job not found")
+
+
+@app.get("/api/etl/result/{job_id}")
+async def api_etl_result(job_id: str, request: Request):
+    # alias to status for now
+    return await api_etl_status(job_id, request)
 
 
 async def transmitir_evento(mensagem: dict):
