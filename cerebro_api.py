@@ -22,24 +22,36 @@ from logging.handlers import TimedRotatingFileHandler
 from connectors.ecommerce_connector import buscar_dados_catalogo_ecommerce
 from connectors.data_connector import executar_pipeline_etl_csv
 
-# Optional web search tool (Tavily wrapper)
+import importlib
+
+# Optional web search tool (Tavily wrapper) — dynamic import to avoid static missing-import diagnostics
+buscar_na_web = None
 try:
-    from jarvis.tools.web_search import buscar_na_web
+    mod = importlib.import_module("jarvis.tools.web_search")
+    buscar_na_web = getattr(mod, "buscar_na_web")
 except Exception:
     try:
-        # fallback if running from project root without src on path
-        from src.jarvis.tools.web_search import buscar_na_web
+        mod = importlib.import_module("src.jarvis.tools.web_search")
+        buscar_na_web = getattr(mod, "buscar_na_web")
     except Exception:
         def buscar_na_web(*args, **kwargs):
             return {"status": "error", "message": "buscar_na_web not available in this environment"}
 
-# Optional agent triggers — these may not exist in all deployments. Provide safe stubs if unavailable.
+# Optional agent triggers — dynamic import with safe stubs if unavailable
+acionar_agente_codigo = None
+acionar_agente_dados_bi = None
+acionar_agente_ecommerce = None
 try:
-    # prefer a top-level agents package if present
-    from agents import acionar_agente_codigo, acionar_agente_dados_bi, acionar_agente_ecommerce
+    mod = importlib.import_module("agents")
+    acionar_agente_codigo = getattr(mod, "acionar_agente_codigo", None)
+    acionar_agente_dados_bi = getattr(mod, "acionar_agente_dados_bi", None)
+    acionar_agente_ecommerce = getattr(mod, "acionar_agente_ecommerce", None)
 except Exception:
     try:
-        from jarvis.agents import acionar_agente_codigo, acionar_agente_dados_bi, acionar_agente_ecommerce
+        mod = importlib.import_module("jarvis.agents")
+        acionar_agente_codigo = getattr(mod, "acionar_agente_codigo", None)
+        acionar_agente_dados_bi = getattr(mod, "acionar_agente_dados_bi", None)
+        acionar_agente_ecommerce = getattr(mod, "acionar_agente_ecommerce", None)
     except Exception:
         def acionar_agente_codigo(*args, **kwargs):
             return {"status": "error", "message": "acionar_agente_codigo not implemented"}
