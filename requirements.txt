@@ -14,7 +14,6 @@ cryptography
 google-genai
 tavily-python
 google-generativeai
-pandasbeautifulsoup4
 playwright
 selenium
 numpy
