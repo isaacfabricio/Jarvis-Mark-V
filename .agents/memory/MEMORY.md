@@ -1,0 +1,1 @@
+- [Jarvis runtime](jarvis-runtime.md) — use the managed Python 3.12 runtime; the base Python 3.13 image lacks pip in this workspace.
