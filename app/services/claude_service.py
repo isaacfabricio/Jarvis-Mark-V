@@ -5,53 +5,40 @@ import asyncio
 from strands import Agent, tool
 from strands.models.gemini import GeminiModel
 
-# Importação dos serviços MCP
-from app.services import db_service, browser_service, memory_service
+# Importação dos serviços disponíveis
+from app.services import db_service, browser_service, memory_service, data_agent_service
 
 logger = logging.getLogger(__name__)
 
-# 1. Diretriz Rigorosa do Agente (Zero-Yapping)
 ZERO_YAPPING_PROMPT = """
 Você é o J.A.R.V.I.S. Mark V, um agente de operações de alta performance.
 
-DIRETRIZES DE OTIMIZAÇÃO (ZERO-YAPPING):
-1. EXECUÇÃO SILENCIOSA: É TERMINANTEMENTE PROIBIDO gerar textos explicativos ou introduções.
-2. SAÍDA RESTRITA: Guarde seu processamento lógico no seu contexto interno.
-3. ECONOMIA: Utilize as ferramentas à sua disposição imediatamente e devolva apenas o resultado final tangível.
+DIRETRIZ: Seja direto, técnico e objetivo. Sem textos desnecessários.
 """
 
-# 2. Definição das Ferramentas usando o Decorator nativo do Strands
 @tool
 def salvar_lembranca(fato: str) -> dict:
-    """Salva uma informação no banco vetorial de longo prazo (Mem0).
-    Args:
-        fato: A informação importante a ser lembrada pelo sistema.
-    """
+    """Salva uma informação no banco vetorial de longo prazo (Mem0)."""
     return memory_service.salvar_lembranca("isaac", fato)
 
 @tool
 def navegar_web(url: str, seletor_css: str = None) -> dict:
-    """Abre um navegador headless para extrair e raspar conteúdo de uma URL.
-    Args:
-        url: A URL a ser visitada.
-        seletor_css: Opcional. Seletor CSS específico para focar a extração.
-    """
+    """Abre um navegador headless para extrair conteúdo de uma URL."""
     return asyncio.run(browser_service.raspar_pagina_web(url, seletor_css))
 
 @tool
 def consultar_firebase(colecao: str, campo_filtro: str = None, valor_filtro: str = None) -> dict:
-    """Consulta dados nativos do sistema no Firebase Firestore.
-    Args:
-        colecao: Nome da coleção do Firebase (ex: 'usuarios').
-        campo_filtro: Opcional. Campo para realizar o filtro.
-        valor_filtro: Opcional. Valor do filtro.
-    """
+    """Consulta dados nativos do sistema no Firebase Firestore."""
     return db_service.consultar_banco_dados(colecao, campo_filtro, valor_filtro)
 
-# 3. Orquestração do Agente Strands
+@tool
+def analisar_dados(fonte: str, filtro: str = None) -> dict:
+    """Processa uma fonte de dados estruturados com um filtro opcional."""
+    return data_agent_service.processar_dados_estruturados(fonte, filtro)
+
 def iniciar_agente():
     """Constrói o objeto do agente conectando o modelo, o prompt e as ferramentas."""
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     model = (
         GeminiModel(
             client_args={"api_key": api_key},
@@ -67,15 +54,16 @@ def iniciar_agente():
         tools=[
             salvar_lembranca,
             navegar_web,
-            consultar_firebase
+            consultar_firebase,
+            analisar_dados,
         ]
     )
 
 def executar_comando(prompt_usuario: str) -> str:
-    """Ponto de entrada para conversar com o J.A.R.V.I.S."""
+    """Ponto de entrada para conversar com o J.A.R.V.I.S. via Gemini."""
     jarvis = iniciar_agente()
     logger.info("Processando comando via Strands Agents...")
-    
+
     resposta = jarvis(prompt_usuario)
     mensagem = getattr(resposta, "message", None)
     if isinstance(mensagem, dict):

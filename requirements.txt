@@ -4,3 +4,15 @@ playwright
 firebase-admin
 anthropic
 google-genai
+typer
+cryptography
+edge-tts
+fastapi
+jarvis
+psutil
+pygame
+python-dotenv
+requests
+speechrecognition
+uvicorn
+websockets
