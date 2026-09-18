@@ -1,25 +1,47 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <meta name="theme-color" content="#030a13" />
-    <meta name="description" content="Interface cognitiva e centro de comando holográfico do JARVIS Mark V" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/style.css" />
-    <title>JARVIS // Interface de Comando</title>
-  </head>
-  <body>
-    <div id="root">
-      <div style="position:fixed;right:16px;bottom:16px;z-index:999;">
-        <button id="voice-btn" onclick="window.habilitarComandoPorVoz && window.habilitarComandoPorVoz()" style="padding:10px 14px;border-radius:8px;background:#00f3ff;color:#001">
-          🎤 Falar com J.A.R.V.I.S.
-        </button>
-      </div>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. Mark V - Hologram HUD</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="hud-app">
+        <!-- Cabeçalho do HUD -->
+        <header class="hud-header">
+            <h1>J.A.R.V.I.S. MARK V</h1>
+            <div class="status-indicator">ONLINE</div>
+        </header>
+
+        <!-- Conteúdo Principal do HUD -->
+        <main class="hud-content">
+            <!-- Painel Central Cognitivo -->
+            <section class="core-panel">
+                <h2>Núcleo Cognitivo</h2>
+                <div class="command-deck">
+                    <input type="text" id="command-input" placeholder="Digite um comando para o J.A.R.V.I.S...." />
+                    <button id="voice-btn">Falar com J.A.R.V.I.S.</button>
+                </div>
+            </section>
+
+            <!-- Cards de Telemetria -->
+            <aside class="telemetry-card">
+                <h3>Telemetria do Sistema</h3>
+                <div id="telemetry-data">
+                    <p>CPU: <span id="cpu-status">Estável</span></p>
+                    <p>Latência: <span id="latency-status">34ms</span></p>
+                </div>
+            </aside>
+        </main>
+
+        <!-- Console de Eventos -->
+        <footer class="event-console">
+            <h3>Console de Eventos</h3>
+            <div id="console-output">[STATUS] Sistemas operacionais carregados com sucesso.</div>
+        </footer>
     </div>
+
     <script src="/static/script.js"></script>
-    <script defer src="%VITE_ANALYTICS_ENDPOINT%/umami" data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
-  </body>
+</body>
 </html>
