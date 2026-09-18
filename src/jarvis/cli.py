@@ -1,82 +1,47 @@
-"""CLI do Jarvis — ponto de entrada Typer.
-
-Comandos principais:
-- listen: modo interativo (REPL) para comandos em linguagem natural
-- run: executar um comando curto (string)
-
-O LLM usado é abstraído em jarvis.llm e requer GEMINI_API_KEY na variável de ambiente.
-"""
-from __future__ import annotations
-import os
-import sys
 import typer
-from .nlu import interpret_command
+import logging
+from app.services.claude_service import executar_comando
 
-app = typer.Typer()
+logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
 
-
-# Subcomando para web-search direto via CLI
-@app.command()
-def web_search(query: str, simulate: bool = typer.Option(False, "--simulate", "Executar em modo simulado sem Tavily")):
-    """Executa uma busca web (usa Tavily)."""
-    from .commands import web_search as _web_search
-    params = {"query": query, "simulate": simulate}
-    result = _web_search(params)
-    typer.echo("Resultado:")
-    typer.echo(result)
-
-
-
-@app.command()
-def run(command: str):
-    """Executa um único comando em linguagem natural."""
-    key = os.getenv("GEMINI_API_KEY")
-    if not key:
-        typer.echo("Variável de ambiente GEMINI_API_KEY não encontrada. Configure-a antes de rodar.")
-        raise typer.Exit(code=1)
-
-    typer.echo(f"Interpretando comando: {command}")
-    intent = interpret_command(command)
-    typer.echo(f"Intent detectada: {intent}")
-    # despacha a intent para os comandos implementados
-    from .commands import execute_intent
-    if isinstance(intent, dict):
-        result = execute_intent(intent.get("intent", "unknown"), intent.get("params", {}))
-    else:
-        # Caso a NLU retorne string inesperada
-        result = execute_intent(str(intent), {})
-    typer.echo("Resultado:")
-    typer.echo(result)
-
+app = typer.Typer(help="J.A.R.V.I.S. Mark V - Interface de Comando Operacional")
 
 @app.command()
 def listen():
     """Modo interativo: digite comandos em linguagem natural (REPL)."""
-    key = os.getenv("GEMINI_API_KEY")
-    if not key:
-        typer.echo("Variável de ambiente GEMINI_API_KEY não encontrada. Configure-a antes de rodar.")
-        raise typer.Exit(code=1)
-
-    typer.echo("Jarvis (REPL) — digite 'sair' para encerrar")
+    print("==================================================")
+    print("  J.A.R.V.I.S. Mark V (Modo Interativo) Online    ")
+    print("==================================================\n")
+    print("[STATUS] Sistemas vitais operacionais. Digite 'sair' para encerrar.\n")
+    
     while True:
         try:
-            text = typer.prompt("Você")
-        except (EOFError, KeyboardInterrupt):
-            typer.echo("\nEncerrando Jarvis.")
-            raise typer.Exit()
-        if text.strip().lower() in ("sair", "exit", "quit"):
-            typer.echo("Até mais.")
-            raise typer.Exit()
-        intent = interpret_command(text)
-        typer.echo(f"Intent: {intent}")
-        from .commands import execute_intent
-        if isinstance(intent, dict):
-            result = execute_intent(intent.get("intent", "unknown"), intent.get("params", {}))
-        else:
-            result = execute_intent(str(intent), {})
-        typer.echo("Resultado:")
-        typer.echo(result)
+            comando = input("\nSenhor > ")
+            if comando.lower() in ['sair', 'exit', 'quit']:
+                print("\n[STATUS] Desligando motores cognitivos. Até logo.")
+                break
+            if not comando.strip():
+                continue
+                
+            resposta = executar_comando(comando)
+            print(f"\nJ.A.R.V.I.S. > {resposta}")
+            
+        except KeyboardInterrupt:
+            print("\n\n[AVISO] Desligamento forçado.")
+            break
 
+@app.command()
+def run(prompt: str):
+    """Executa um único comando em linguagem natural repassado por argumento."""
+    print(f"[PROCESSANDO] Executando instrução: {prompt}")
+    resposta = executar_comando(prompt)
+    print(f"\nJ.A.R.V.I.S. > {resposta}")
+
+@app.command()
+def web_search():
+    """Executa uma busca web (integração futura com Tavily)."""
+    print("[STATUS] Módulo de busca web estruturado para ativação.")
 
 if __name__ == "__main__":
     app()
