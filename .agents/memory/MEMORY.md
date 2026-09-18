@@ -1,1 +1,2 @@
 - [Jarvis runtime](jarvis-runtime.md) — use the managed Python 3.12 runtime; the base Python 3.13 image lacks pip in this workspace.
+- [Preview cache behavior](preview-cache.md) — use a cache-busting query when the preview shows stale HTML after a workflow restart.
