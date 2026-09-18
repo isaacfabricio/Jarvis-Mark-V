@@ -1,0 +1,49 @@
+// Exemplo de implementação no frontend/script.js
+
+let ws = null;
+
+function conectarJarvisWebSocket() {
+    // Recupera o token do localStorage ou define como vazio/desenvolvimento
+    const token = localStorage.getItem("JARVIS_TOKEN") || "";
+    
+    // Constrói a URL do WebSocket (passando o token como parâmetro se o backend aceitar)
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+
+    console.log("[HUD] Tentando estabelecer conexão neural com o WebSocket...");
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = function(event) {
+        console.log("[HUD] Conexão WebSocket estabelecida com sucesso.");
+        atualizarConsoleLog("Sistemas neurais conectados e sincronizados.");
+    };
+
+    ws.onerror = function(error) {
+        // Tratamento elegante do erro (ex: 403 Forbidden ou falha de rede)
+        console.warn("[HUD] Aviso de Conexão: Falha no canal WebSocket (possível ausência ou invalidez do JARVIS_TOKEN).");
+        atualizarConsoleLog("[AVISO] Acesso restrito ou token ausente. Operando em modo de telemetria local.");
+    };
+
+    ws.onclose = function(event) {
+        if (event.code === 403 || event.reason === "Unauthorized") {
+            console.error("[HUD] Erro 403: Autenticação recusada pelo núcleo.");
+            atualizarConsoleLog("[ERRO 403] Token de acesso inválido ou ausente. Insira um JARVIS_TOKEN válido.");
+        } else {
+            console.log(`[HUD] Conexão encerrada (Código: ${event.code}). Tentando reconectar em 5 segundos...`);
+            setTimeout(conectarJarvisWebSocket, 5000); // Tentativa de reconexão automática
+        }
+    };
+}
+
+function atualizarConsoleLog(mensagem) {
+    const consoleOutput = document.getElementById("console-output");
+    if (consoleOutput) {
+        consoleOutput.innerHTML += `<br>${mensagem}`;
+        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    }
+}
+
+// Inicializa a conexão ao carregar a página
+window.addEventListener("DOMContentLoaded", () => {
+    conectarJarvisWebSocket();
+});

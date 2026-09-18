@@ -1,10 +1,63 @@
-// Setup WebSocket connection (asks for token if not provided)
-const token = window.JARVIS_TOKEN || window.localStorage.getItem('JARVIS_TOKEN') || prompt('Insira o JARVIS_TOKEN de acesso ao WebSocket:');
-if (token) window.localStorage.setItem('JARVIS_TOKEN', token);
-const protocol = (location.protocol === 'https:') ? 'wss' : 'ws';
-const ws = new WebSocket(`${protocol}://${location.host}/ws/${token}`);
+// The backend expects the token in /ws/{token}. Browser WebSocket clients
+// cannot add custom HTTP headers, so accept it through the URL or page state.
+let ws = null;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY_MS = 15000;
 
-ws.onmessage = (event) => {
+function getWebSocketToken() {
+  const params = new URLSearchParams(window.location.search);
+  const tokenFromUrl = params.get("token") || params.get("jarvis_token");
+  const token =
+    tokenFromUrl ||
+    window.JARVIS_TOKEN ||
+    window.localStorage.getItem("JARVIS_TOKEN");
+
+  if (token) {
+    const normalizedToken = token.trim();
+    if (normalizedToken) {
+      window.localStorage.setItem("JARVIS_TOKEN", normalizedToken);
+      return normalizedToken;
+    }
+  }
+
+  return null;
+}
+
+function setConnectionState(state, message) {
+  const statusElement =
+    document.getElementById("status-text") ||
+    document.querySelector(".status-indicator");
+
+  if (statusElement) {
+    statusElement.innerText = state;
+  }
+
+  document.body.dataset.status = state.toLowerCase();
+
+  const consoleOutput = document.getElementById("console-output");
+  if (consoleOutput && message) {
+    consoleOutput.innerText = `[STATUS] ${message}`;
+  }
+}
+
+function scheduleWebSocketReconnect() {
+  if (reconnectTimer || !getWebSocketToken()) {
+    return;
+  }
+
+  const delay = Math.min(
+    1000 * 2 ** reconnectAttempts,
+    MAX_RECONNECT_DELAY_MS,
+  );
+  reconnectAttempts += 1;
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null;
+    initWebSocket();
+  }, delay);
+}
+
+function handleWebSocketMessage(event) {
   const data = JSON.parse(event.data);
 
   if (data.type === "telemetry") {
@@ -47,18 +100,73 @@ ws.onmessage = (event) => {
       jarvisFalar(data.log);
     }
   }
-};
+}
 
-ws.onopen = () => {
-  const st = document.getElementById("status-text");
-  if (st) st.innerText = "ONLINE";
-};
+function initWebSocket() {
+  if (
+    ws &&
+    (ws.readyState === WebSocket.OPEN ||
+      ws.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
 
-ws.onclose = () => {
-  const st = document.getElementById("status-text");
-  if (st) st.innerText = "OFFLINE";
-  document.body.dataset.status = "offline";
-};
+  const token = getWebSocketToken();
+  if (!token) {
+    ws = null;
+    setConnectionState(
+      "AUTH REQUIRED",
+      "Token ausente. Use ?token=... ou configure JARVIS_TOKEN.",
+    );
+    return;
+  }
+
+  const protocol = location.protocol === "https:" ? "wss" : "ws";
+  const endpoint = `${protocol}://${location.host}/ws/${encodeURIComponent(token)}`;
+
+  try {
+    ws = new WebSocket(endpoint);
+  } catch (error) {
+    console.error("Falha ao criar conexão WebSocket:", error);
+    setConnectionState("ERROR", "Não foi possível iniciar o WebSocket.");
+    scheduleWebSocketReconnect();
+    return;
+  }
+
+  ws.onopen = () => {
+    reconnectAttempts = 0;
+    setConnectionState("ONLINE", "Conexão segura estabelecida.");
+  };
+
+  ws.onmessage = handleWebSocketMessage;
+
+  ws.onerror = (event) => {
+    console.error("Erro na conexão WebSocket:", event);
+    setConnectionState("ERROR", "Falha na conexão com o núcleo.");
+  };
+
+  ws.onclose = (event) => {
+    ws = null;
+    const authenticationFailure = event.code === 1008;
+
+    if (authenticationFailure) {
+      window.localStorage.removeItem("JARVIS_TOKEN");
+      setConnectionState(
+        "AUTH REQUIRED",
+        "Token rejeitado. Informe um token válido em ?token=...",
+      );
+      return;
+    }
+
+    setConnectionState(
+      "OFFLINE",
+      `Conexão encerrada${event.code ? ` (código ${event.code})` : ""}.`,
+    );
+    scheduleWebSocketReconnect();
+  };
+}
+
+initWebSocket();
 
 // Relógio Stark
 setInterval(() => {
