@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from app.api.routes import router as api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.services.system_service import SystemService
 
 setup_logging()
 logger = logging.getLogger("JARVIS_CORE")
+FRONTEND_DIR = Path("frontend")
 
 
 @asynccontextmanager
@@ -61,6 +66,20 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Mount static assets for HUD if directory is present
+    if FRONTEND_DIR.exists():
+        app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+        @app.get("/", include_in_schema=False)
+        async def serve_hud_interface() -> FileResponse:
+            """Serves the primary HUD HTML canvas."""
+            return FileResponse(FRONTEND_DIR / "index.html")
+
+    @app.get("/healthz", tags=["Health"])
+    async def k8s_health_check() -> dict[str, object]:
+        """Kubernetes and cloud-native healthz check endpoint."""
+        return {"status": "ok", "service": "jarvis-core", "telemetry": SystemService.get_telemetry()}
 
     app.include_router(api_router)
     return app

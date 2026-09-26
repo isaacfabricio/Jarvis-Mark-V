@@ -3,11 +3,17 @@ from __future__ import annotations
 """Unit and validation tests for J.A.R.V.I.S. Mark V core architecture."""
 
 import concurrent.futures
+import shutil
 import unittest
+from pathlib import Path
+from cryptography.fernet import Fernet
+
 from app.core.config import Settings
 from app.core.exceptions import SecurityHardeningError
 from app.services.memory_service import MemoryService
+from app.services.personality_service import PersonalityService
 from app.services.system_service import SystemService
+from app.services.vault_service import VaultService
 
 
 class TestJarvisMarkV(unittest.TestCase):
@@ -50,7 +56,36 @@ class TestJarvisMarkV(unittest.TestCase):
 
         self.assertEqual(service.get_item("key_42"), "val_42")
 
+    def test_personality_service(self) -> None:
+        """Verifies personality matrix boundaries and instruction generation."""
+        service = PersonalityService()
+        success, _ = service.adjust_trait("sarcasmo", 75)
+        self.assertTrue(success)
+        self.assertEqual(service.get_matrix()["sarcasmo"], 75)
+
+        instructions = service.get_system_instructions()
+        self.assertIn("J.A.R.V.I.S.", instructions)
+        self.assertIn("Senhor", instructions)
+
+    def test_vault_service_encryption(self) -> None:
+        """Verifies AES-256 encryption and decryption of secrets."""
+        test_vault_dir = Path("test_vault_tmp")
+        key = Fernet.generate_key().decode()
+
+        # Temporarily configure cipher with valid test key
+        vault = VaultService(vault_dir=test_vault_dir)
+        vault._cipher = Fernet(key.encode("utf-8"))
+
+        try:
+            saved_path = vault.store_encrypted("senha_mestra", "super_secret_payload_123")
+            self.assertTrue(saved_path.exists())
+
+            decrypted = vault.retrieve_decrypted("senha_mestra")
+            self.assertEqual(decrypted, "super_secret_payload_123")
+        finally:
+            if test_vault_dir.exists():
+                shutil.rmtree(test_vault_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()
-
