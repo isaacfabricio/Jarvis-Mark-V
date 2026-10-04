@@ -3,45 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>J.A.R.V.I.S. Mark V - Hologram HUD</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>J.A.R.V.I.S. Mark V - HUD Suprema Multi-Team</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #030712;
+            color: #00ffcc;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        .hud-overlay {
+            position: relative;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .hud-panel {
+            background: rgba(0, 20, 40, 0.9);
+            border: 1px solid #00ffcc;
+            padding: 15px;
+            border-radius: 8px;
+            pointer-events: auto;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.4);
+            width: 390px;
+            max-height: 94vh;
+            overflow-y: auto;
+        }
+        input, button, select {
+            background: #001525;
+            border: 1px solid #00ffcc;
+            color: #00ffcc;
+            padding: 8px;
+            margin-top: 5px;
+            font-family: inherit;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: #00ffcc;
+            color: #030712;
+        }
+        #output-log {
+            max-height: 130px;
+            overflow-y: auto;
+            font-size: 11px;
+            margin-top: 8px;
+            white-space: pre-wrap;
+            background: rgba(0,0,0,0.6);
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #005544;
+        }
+        .section-title {
+            font-size: 11px;
+            color: #00bfff;
+            margin-top: 12px;
+            border-bottom: 1px dashed #00bfff;
+            padding-bottom: 2px;
+        }
+    </style>
 </head>
 <body>
-    <div class="hud-app">
-        <!-- Cabeçalho do HUD -->
-        <header class="hud-header">
-            <h1>J.A.R.V.I.S. MARK V</h1>
-            <div class="status-indicator">ONLINE</div>
-        </header>
+    <div id="canvas-container"></div>
 
-        <!-- Conteúdo Principal do HUD -->
-        <main class="hud-content">
-            <!-- Painel Central Cognitivo -->
-            <section class="core-panel">
-                <h2>Núcleo Cognitivo</h2>
-                <div class="command-deck">
-                    <input type="text" id="command-input" placeholder="Digite um comando para o J.A.R.V.I.S...." />
-                    <button id="voice-btn">Falar com J.A.R.V.I.S.</button>
-                </div>
-            </section>
+    <div class="hud-overlay">
+        <div class="hud-panel">
+            <h2>J.A.R.V.I.S. MARK V</h2>
+            <p style="font-size: 9px; color: #00bfff;">NÚCLEO: MULTI-TEAM SECURITY MATRIX</p>
+            
+            <div class="section-title">COMANDO COGNITIVO</div>
+            <input type="text" id="prompt-input" placeholder="Digite uma ordem...">
+            <button onclick="enviarComando()">DISPARAR AGENTE</button>
 
-            <!-- Cards de Telemetria -->
-            <aside class="telemetry-card">
-                <h3>Telemetria do Sistema</h3>
-                <div id="telemetry-data">
-                    <p>CPU: <span id="cpu-status">Estável</span></p>
-                    <p>Latência: <span id="latency-status">34ms</span></p>
-                </div>
-            </aside>
-        </main>
+            <div class="section-title">MATRIZ MULTI-TEAM (DEFESA & TÁTICA)</div>
+            <select id="multiteam-select">
+                <option value="blue-team">Blue Team (Defesa & Resposta)</option>
+                <option value="purple-team">Purple Team (Sinergia Ofensiva/Defensiva)</option>
+                <option value="yellow-team">Yellow Team (Engenharia Segura & Hardening)</option>
+                <option value="orange-team">Orange Team (Simulação de Adversários & Phishing)</option>
+                <option value="green-team">Green Team (Cloud Security & DevSecOps)</option>
+                <option value="white-team">White Team (Governança & Compliance)</option>
+            </select>
+            <input type="text" id="multiteam-contexto" placeholder="Contexto, log ou sistema sob análise...">
+            <button onclick="executarMultiTeam()" style="background: #002233; border-color: #00bfff; color: #00bfff;">EXECUTAR AUDITORIA MULTI-TEAM</button>
 
-        <!-- Console de Eventos -->
-        <footer class="event-console">
-            <h3>Console de Eventos</h3>
-            <div id="console-output">[STATUS] Sistemas operacionais carregados com sucesso.</div>
-        </footer>
+            <div class="section-title">STRIX: PENTEST AUTÔNOMO</div>
+            <input type="text" id="strix-alvo" placeholder="URL do Alvo / App...">
+            <button onclick="executarStrixPentest()" style="background: #003333; border-color: #ff3366; color: #ff3366;">EXECUTAR STRIX</button>
+
+            <div class="section-title">TELEMETRIA & RELATÓRIOS</div>
+            <div id="output-log">Sistemas operacionais ativados com sucesso...</div>
+        </div>
     </div>
 
-    <script src="/static/script.js?v=ws-handlers-1"></script>
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const geometry = new THREE.IcosahedronGeometry(2.5, 3);
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true, transparent: true, opacity: 0.3 });
+        const holoSphere = new THREE.Mesh(geometry, material);
+        scene.add(holoSphere);
+
+        camera.position.z = 6;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            holoSphere.rotation.x += 0.002;
+            holoSphere.rotation.y += 0.004;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        async function enviarComando() {
+            const prompt = document.getElementById('prompt-input').value.trim();
+            const log = document.getElementById('output-log');
+            if (!prompt) return;
+
+            log.innerText = "Processando comando...";
+            try {
+                const res = await fetch('/api/comando', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const data = await res.json();
+                log.innerText = data.sucesso ? "J.A.R.V.I.S. >\n" + data.resposta : "Erro: " + data.detail;
+            } catch (err) {
+                log.innerText = "Erro: " + err.message;
+            }
+        }
+
+        async function executarMultiTeam() {
+            const time = document.getElementById('multiteam-select').value;
+            const contexto = document.getElementById('multiteam-contexto').value.trim();
+            const log = document.getElementById('output-log');
+            if (!contexto) {
+                log.innerText = "Insira um contexto ou log para análise.";
+                return;
+            }
+
+            log.innerText = `[${time.toUpperCase()}] Analisando contexto...`;
+            try {
+                const res = await fetch('/api/security/multiteam', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ time, contexto })
+                });
+                const data = await res.json();
+                if (data.sucesso) {
+                    log.innerText = `Relatório (${data.disciplina}) >\n` + data.relatorio_tecnico;
+                } else {
+                    log.innerText = "Erro na análise Multi-Team.";
+                }
+            } catch (err) {
+                log.innerText = "Erro de conexão: " + err.message;
+            }
+        }
+
+        async function executarStrixPentest() {
+            const alvo = document.getElementById('strix-alvo').value.trim();
+            const log = document.getElementById('output-log');
+            if (!alvo) return;
+
+            log.innerText = `[Strix] Varrendo ${alvo}...`;
+            try {
+                const res = await fetch('/api/security/strix-pentest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ alvo, escopo: "OWASP Top 10" })
+                });
+                const data = await res.json();
+                log.innerText = data.sucesso ? `Strix Report >\n` + data.relatorio_vulnerabilidades : "Erro na varredura.";
+            } catch (err) {
+                log.innerText = "Erro: " + err.message;
+            }
+        }
+    </script>
 </body>
 </html>
