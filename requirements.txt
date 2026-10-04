@@ -25,3 +25,5 @@ xlrd
 streamlit
 websocket-client
 beautifulsoup4
+mem0ai
+qdrant-client
