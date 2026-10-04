@@ -9,7 +9,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.services.claude_service import executar_comando
+from app.services.graph_service import executar_fluxo_grafo_nemotron
 from app.services.memory_service import salvar_lembranca, buscar_lembrancas
+from app.services.nemotron_service import executar_raciocinio_nemotron
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("JARVIS-Cerebro")
@@ -49,6 +51,28 @@ def processar_comando(req: ComandoRequest):
         return {"sucesso": True, "resposta": resposta}
     except Exception as exc:
         logger.exception("Erro ao processar comando via API.")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/nemotron/raciocinar")
+def api_raciocinar_nemotron(req: ComandoRequest):
+    """Executa inferência de raciocínio estratégico de fronteira com o Nemotron."""
+    try:
+        resposta = executar_raciocinio_nemotron(req.prompt)
+        return {"sucesso": True, "resposta": resposta}
+    except Exception as exc:
+        logger.exception("Erro ao processar raciocínio Nemotron.")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/grafo/executar")
+def api_executar_grafo(req: ComandoRequest):
+    """Executa o pipeline cognitivo completo unindo Memória Vetorial, Grafos e Nemotron."""
+    try:
+        resposta = executar_fluxo_grafo_nemotron(req.prompt)
+        return {"sucesso": True, "resposta": resposta}
+    except Exception as exc:
+        logger.exception("Erro ao processar fluxo de grafo Nemotron.")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
