@@ -1,4 +1,4 @@
-"""Servidor Central do J.A.R.V.I.S. (FastAPI Backend + HUD Host)."""
+"""Servidor Central do J.A.R.V.I.S. Mark V (Versão Suprema Consolidada)."""
 from __future__ import annotations
 
 import logging
@@ -8,17 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.services.claude_service import executar_comando
-from app.services.graph_service import executar_fluxo_grafo_nemotron
-from app.services.memory_service import salvar_lembranca, buscar_lembrancas
-from app.services.nemotron_service import executar_raciocinio_nemotron
+from app.services.graph_rag_service import ProductionGraphRAG
+from app.services.graph_service import JarvisGraphOrchestrator
+from app.services.self_healing_service import diagnosticar_e_corrigir_codigo
+from app.services.voice_service import VoiceEngine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("JARVIS-Cerebro")
 
-app = FastAPI(title="J.A.R.V.I.S. Mark V - Cerebro Central", version="5.0")
+app = FastAPI(title="J.A.R.V.I.S. Mark V - Supremos Consolidados", version="7.0")
 
-# Configuração de CORS para aceitar requisições da HUD
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,68 +32,46 @@ class ComandoRequest(BaseModel):
     user_id: str = "isaac"
 
 
-class MemoriaRequest(BaseModel):
+class ProductionGraphRagRequest(BaseModel):
     user_id: str = "isaac"
-    texto: str
+    entidade: str
+    relacao: str
+    detalhes: str
+
+
+class HealingRequest(BaseModel):
+    arquivo: str
 
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "online", "sistema": "J.A.R.V.I.S. Mark V Core Ativo"}
+    return {"status": "online", "sistema": "J.A.R.V.I.S. Mark V Totalmente Operacional"}
 
 
 @app.post("/api/comando")
 def processar_comando(req: ComandoRequest):
-    """Executa um comando através do núcleo cognitivo do agente."""
     try:
-        resposta = executar_comando(req.prompt)
+        grafo = JarvisGraphOrchestrator(user_id=req.user_id)
+        resposta = grafo.executar(req.prompt)
         return {"sucesso": True, "resposta": resposta}
     except Exception as exc:
-        logger.exception("Erro ao processar comando via API.")
+        logger.exception("Erro crítico no processamento de comando.")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/api/nemotron/raciocinar")
-def api_raciocinar_nemotron(req: ComandoRequest):
-    """Executa inferência de raciocínio estratégico de fronteira com o Nemotron."""
+@app.post("/api/graph-rag-prod")
+def api_graph_rag_prod(req: ProductionGraphRagRequest):
     try:
-        resposta = executar_raciocinio_nemotron(req.prompt)
-        return {"sucesso": True, "resposta": resposta}
+        return ProductionGraphRAG.indexar_conhecimento(req.entidade, req.relacao, req.detalhes, req.user_id)
     except Exception as exc:
-        logger.exception("Erro ao processar raciocínio Nemotron.")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/api/grafo/executar")
-def api_executar_grafo(req: ComandoRequest):
-    """Executa o pipeline cognitivo completo unindo Memória Vetorial, Grafos e Nemotron."""
-    try:
-        resposta = executar_fluxo_grafo_nemotron(req.prompt)
-        return {"sucesso": True, "resposta": resposta}
-    except Exception as exc:
-        logger.exception("Erro ao processar fluxo de grafo Nemotron.")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+@app.post("/api/self-healing")
+def api_self_healing(req: HealingRequest):
+    return diagnosticar_e_corrigir_codigo(req.arquivo)
 
 
-@app.post("/api/memoria/salvar")
-def api_salvar_memoria(req: MemoriaRequest):
-    """Adiciona um fato à memória de longo prazo."""
-    resultado = salvar_lembranca(req.user_id, req.texto)
-    if not resultado.get("sucesso"):
-        raise HTTPException(status_code=400, detail=resultado.get("erro"))
-    return resultado
-
-
-@app.get("/api/memoria/buscar")
-def api_buscar_memoria(user_id: str, q: str):
-    """Consulta memórias persistidas do usuário."""
-    resultado = buscar_lembrancas(user_id, q)
-    if not resultado.get("sucesso"):
-        raise HTTPException(status_code=400, detail=resultado.get("erro"))
-    return resultado
-
-
-# Monta os arquivos estáticos da HUD (caso a pasta frontend exista)
 if os.path.exists("frontend"):
     app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 

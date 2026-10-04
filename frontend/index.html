@@ -1,24 +1,202 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <meta name="theme-color" content="#030a13" />
-    <meta name="description" content="Interface cognitiva e centro de comando holográfico do JARVIS Mark V" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <title>JARVIS // Interface de Comando</title>
-  </head>
-  <body>
-    <div id="root">
-      <div style="position:fixed;right:16px;bottom:16px;z-index:999;">
-        <button id="voice-btn" onclick="window.habilitarComandoPorVoz && window.habilitarComandoPorVoz()" style="padding:10px 14px;border-radius:8px;background:#00f3ff;color:#001">
-          🎤 Falar com J.A.R.V.I.S.
-        </button>
-      </div>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. Mark V - HUD Holográfica Avançada</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #030712;
+            color: #00ffcc;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        .hud-overlay {
+            position: relative;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .hud-panel {
+            background: rgba(0, 20, 40, 0.85);
+            border: 1px solid #00ffcc;
+            padding: 15px;
+            border-radius: 8px;
+            pointer-events: auto;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.4);
+            width: 360px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        input, button, select {
+            background: #001525;
+            border: 1px solid #00ffcc;
+            color: #00ffcc;
+            padding: 8px;
+            margin-top: 6px;
+            font-family: inherit;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+        }
+        button:hover {
+            background: #00ffcc;
+            color: #030712;
+        }
+        #output-log {
+            max-height: 140px;
+            overflow-y: auto;
+            font-size: 11px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            background: rgba(0,0,0,0.5);
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #005544;
+        }
+        .section-title {
+            font-size: 12px;
+            color: #00bfff;
+            margin-top: 15px;
+            border-bottom: 1px dashed #00bfff;
+            padding-bottom: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div class="hud-overlay">
+        <div class="hud-panel">
+            <h2>J.A.R.V.I.S. MARK V</h2>
+            <p style="font-size: 10px; color: #00bfff;">NÚCLEO: NEMOTRON 3 ULTRA + GRAPH RAG</p>
+            
+            <div class="section-title">COMANDO COGNITIVO</div>
+            <input type="text" id="prompt-input" placeholder="Digite uma ordem para o cérebro...">
+            <button onclick="enviarComando()">DISPARAR AGENTE</button>
+
+            <div class="section-title">GRAPH RAG (PRODUÇÃO)</div>
+            <input type="text" id="rag-entidade" placeholder="Entidade (ex: Arquitetura)">
+            <input type="text" id="rag-detalhes" placeholder="Detalhes ou Relação...">
+            <button onclick="executarGraphRag()">INDEXAR CONHECIMENTO</button>
+
+            <div class="section-title">AUTO-HEALING (CÓDIGO)</div>
+            <input type="text" id="healing-arquivo" value="cerebro_api.py" placeholder="Arquivo Python...">
+            <button onclick="executarSelfHealing()">DIAGNOSTICAR CÓDIGO</button>
+
+            <div class="section-title">TELEMETRIA & SAÍDA</div>
+            <div id="output-log">Sistemas operacionais online e aguardando comandos...</div>
+        </div>
     </div>
-    <script src="/script.js"></script>
-    <script defer src="%VITE_ANALYTICS_ENDPOINT%/umami" data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
-  </body>
+
+    <script>
+        // Renderizador 3D Three.js (Esfera Holográfica)
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const geometry = new THREE.IcosahedronGeometry(2.5, 3);
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true, transparent: true, opacity: 0.3 });
+        const holoSphere = new THREE.Mesh(geometry, material);
+        scene.add(holoSphere);
+
+        camera.position.z = 6;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            holoSphere.rotation.x += 0.002;
+            holoSphere.rotation.y += 0.004;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Integração Avançada com os Endpoints do FastAPI
+        async function enviarComando() {
+            const prompt = document.getElementById('prompt-input').value.trim();
+            const log = document.getElementById('output-log');
+            if (!prompt) return;
+
+            log.innerText = "Processando via Nemotron 3 Ultra...";
+            try {
+                const res = await fetch('/api/comando', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt })
+                });
+                const data = await res.json();
+                log.innerText = data.sucesso ? "J.A.R.V.I.S. >\n" + data.resposta : "Erro: " + data.detail;
+            } catch (err) {
+                log.innerText = "Erro de conexão: " + err.message;
+            }
+        }
+
+        async function executarGraphRag() {
+            const entidade = document.getElementById('rag-entidade').value.trim();
+            const detalhes = document.getElementById('rag-detalhes').value.trim();
+            const log = document.getElementById('output-log');
+            if (!entidade || !detalhes) return;
+
+            log.innerText = "Indexando no Graph RAG...";
+            try {
+                const res = await fetch('/api/graph-rag-prod', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entidade, relacao: "Associado", detalhes })
+                });
+                const data = await res.json();
+                log.innerText = "Graph RAG > Conhecimento indexado com sucesso na entidade: " + data.entidade;
+            } catch (err) {
+                log.innerText = "Erro no Graph RAG: " + err.message;
+            }
+        }
+
+        async function executarSelfHealing() {
+            const arquivo = document.getElementById('healing-arquivo').value.trim();
+            const log = document.getElementById('output-log');
+            if (!arquivo) return;
+
+            log.innerText = "Executando auto-diagnóstico de código...";
+            try {
+                const res = await fetch('/api/self-healing', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ arquivo })
+                });
+                const data = await res.json();
+                log.innerText = "Self-Healing > Status: " + (data.status || data.mensagem);
+            } catch (err) {
+                log.innerText = "Erro no Self-Healing: " + err.message;
+            }
+        }
+    </script>
+</body>
 </html>
